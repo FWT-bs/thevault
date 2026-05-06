@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Vault — Daily Streak</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<style>
+  html, body { margin:0; padding:0; height:100%;
+    background: #1a1d24;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+    overflow:hidden;
+  }
+  * { box-sizing: border-box; }
+  #root { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="components/ios-frame.jsx"></script>
+<script type="text/babel" src="components/streak-popup.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+const PHONE_W = 390;
+const PHONE_H = 844;
+
+const Phone = ({ children }) => (
+  <div style={{
+    width: PHONE_W, height: PHONE_H, borderRadius: 54, overflow:'hidden',
+    position:'relative', background:'#000',
+    boxShadow:'0 40px 80px -20px rgba(0,0,0,0.55), 0 0 0 10px #111, 0 0 0 11px rgba(255,255,255,0.06)',
+  }}>
+    <div style={{ position:'absolute', top:0, left:0, right:0, zIndex:30, pointerEvents:'none' }}>
+      <IOSStatusBar dark={true}/>
+    </div>
+    <div style={{ position:'absolute', top:11, left:'50%', transform:'translateX(-50%)', width:126, height:37, borderRadius:24, background:'#000', zIndex:50 }}/>
+    <div style={{ position:'absolute', bottom:8, left:0, right:0, zIndex:60, display:'flex', justifyContent:'center', pointerEvents:'none' }}>
+      <div style={{ width:139, height:5, borderRadius:100, background:'rgba(255,255,255,0.4)' }}/>
+    </div>
+    {children}
+  </div>
+);
+
+const App = () => {
+  const [scale, setScale] = React.useState(1);
+  const [key, setKey] = React.useState(0);
+
+  React.useEffect(() => {
+    const fit = () => {
+      const pad = 60;
+      const s1 = (window.innerWidth - pad) / PHONE_W;
+      const s2 = (window.innerHeight - pad) / PHONE_H;
+      setScale(Math.min(s1, s2, 1));
+    };
+    fit(); window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+
+  // ── CUSTOMIZE TEXT + NUMBER HERE ────────────────────────────
+  const config = {
+    streak: 7,                                 // streak number shown inside the fire
+    title: "Congratulations!",                 // heading
+    subtitle: "You're on a 7-day streak",      // line under the heading
+    rewardAmount: 25,                          // credits awarded
+    rewardLabel: "CR",                         // currency abbr (e.g. CR, coins)
+    rewardCaption: "Streak bonus reward",      // small line above the chip
+    ctaLabel: "Continue",                      // button text
+  };
+  // ────────────────────────────────────────────────────────────
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
+      <div style={{ transform:`scale(${scale})`, transformOrigin:'center' }}>
+        <Phone>
+          <StreakPopup key={key} {...config} onContinue={() => setKey(k => k+1)} />
+        </Phone>
+      </div>
+      <button onClick={() => setKey(k => k+1)} style={{
+        appearance:'none', cursor:'pointer', border:'0.5px solid rgba(255,255,255,0.15)',
+        background:'rgba(255,255,255,0.06)', color:'rgba(255,255,255,0.7)',
+        padding:'8px 14px', borderRadius:10, fontSize:12, fontWeight:600,
+        fontFamily:'inherit', backdropFilter:'blur(10px)',
+      }}>↻ Replay animation</button>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

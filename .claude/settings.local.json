@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(npx --no-install tsc --noEmit)",
+      "Bash(npx skills *)",
+      "Bash(pkill -f \"skills add\")",
+      "Bash(npx *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(node *)",
+      "Bash(pkill -f \"expo start\")",
+      "Bash(pkill -f \"metro\")",
+      "Bash(rm -rf node_modules/.cache .expo/.cache /tmp/metro-* /tmp/haste-map-*)",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(mkdir -p /tmp/design_bundle)",
+      "Bash(tar -xzf /Users/fwt/.claude/projects/-Users-fwt-Downloads-thevault-main/07bada5e-11e1-446c-b761-4390b824b3c9/tool-results/webfetch-1778079429105-le9z7x.bin -C /tmp/design_bundle)",
+      "Read(//private/tmp/design_bundle/**)",
+      "WebSearch",
+      "Bash(mkdir -p /tmp/vault-design)",
+      "Bash(tar -xzf /Users/fwt/.claude/projects/-Users-fwt-Downloads-thevault-main/92fdcf33-97cb-4549-8be9-31107d4b5f46/tool-results/webfetch-1778098754393-py0v2y.bin -C /tmp/vault-design)",
+      "Read(//tmp/**)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(mkdir -p /tmp/streak-design)",
+      "Bash(tar -xzf /Users/fwt/.claude/projects/-Users-fwt-Downloads-thevault-main/92fdcf33-97cb-4549-8be9-31107d4b5f46/tool-results/webfetch-1778099790591-dhq9f2.bin -C /tmp/streak-design)",
+      "Read(//private/tmp/streak-design/vault/chats/**)",
+      "Read(//private/tmp/streak-design/vault/**)"
+    ]
+  }
+}
