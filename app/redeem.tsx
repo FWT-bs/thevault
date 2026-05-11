@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { formatSharePercent } from "@thevault/domain";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import LottieView from "lottie-react-native";
@@ -16,6 +17,11 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { GLASS } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { usePayoutGuardrails } from "../services/features/monetization";
+import { useCreateRedemption } from "../services/features/redemption";
+import { useRiskEvaluate } from "../services/features/risk";
+import { useVaultLevel } from "../services/features/vaultLevel";
+import { useWalletBalance } from "../services/features/wallet";
 
 const CHECKMARK_ANIMATION = require("../assets/checkmark.json");
 
@@ -38,13 +44,19 @@ const GIFT_CARDS: GiftCardBrand[] = [
 ];
 
 const GIFT_DENOMINATIONS = [5, 10, 25, 50] as const;
-const PAYPAL_QUICK_AMOUNTS = [5, 10, 25, 50, 100] as const;
-const CREDITS_AVAILABLE = 245075;
+const PAYPAL_QUICK_AMOUNTS = [5, 10, 20, 25, 50, 100] as const;
 const CR_PER_USD = 100;
+const GIFT_MIN_USD = 10;
+const CASH_MIN_USD = 20;
 
 export default function RedeemPage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { data: wallet } = useWalletBalance();
+  const { data: vaultLevel } = useVaultLevel();
+  const createRedemption = useCreateRedemption();
+  const riskEvaluate = useRiskEvaluate();
+  const payoutGuardrails = usePayoutGuardrails();
   const [tab, setTab] = useState<RedeemTab>("gift");
   const [confirmed, setConfirmed] = useState<{
     method: string;
@@ -57,9 +69,11 @@ export default function RedeemPage() {
   const [giftDenomination, setGiftDenomination] = useState<number>(10);
   // paypal state
   const [paypalEmail, setPaypalEmail] = useState("");
-  const [paypalAmount, setPaypalAmount] = useState<number>(10);
+  const [paypalAmount, setPaypalAmount] = useState<number>(20);
 
-  const balanceUSD = (CREDITS_AVAILABLE / CR_PER_USD).toFixed(2);
+  const availableCredits = wallet?.availableCredits ?? wallet?.credits ?? 0;
+  const balanceUSD = ((wallet?.availableUsd ?? wallet?.usdBalance ?? 0)).toFixed(2);
+  const shareLabel = formatSharePercent(vaultLevel?.revenueShareBps ?? wallet?.currentShareBps ?? 3000);
 
   const summary = useMemo(() => {
     if (tab === "gift" && selectedBrand) {
@@ -67,7 +81,7 @@ export default function RedeemPage() {
         method: `${selectedBrand.brand} gift card`,
         amount: `$${giftDenomination}.00`,
         creditsSpent: giftDenomination * CR_PER_USD,
-        canRedeem: giftDenomination * CR_PER_USD <= CREDITS_AVAILABLE,
+        canRedeem: giftDenomination >= GIFT_MIN_USD && giftDenomination * CR_PER_USD <= availableCredits,
       };
     }
     if (tab === "paypal") {
@@ -76,15 +90,32 @@ export default function RedeemPage() {
         amount: `$${paypalAmount}.00`,
         creditsSpent: paypalAmount * CR_PER_USD,
         canRedeem:
-          paypalAmount * CR_PER_USD <= CREDITS_AVAILABLE &&
+          paypalAmount >= CASH_MIN_USD &&
+          paypalAmount * CR_PER_USD <= availableCredits &&
           paypalEmail.includes("@"),
       };
     }
     return null;
   }, [tab, selectedBrand, giftDenomination, paypalAmount, paypalEmail]);
 
-  const handleRedeem = () => {
+  const handleRedeem = async () => {
     if (!summary?.canRedeem) return;
+    const amountUsd = Number(summary.amount.replace("$", "").replace(".00", ""));
+    const risk = await riskEvaluate.mutateAsync({
+      action: "redemption_create",
+      amountCredits: summary.creditsSpent,
+    });
+    const guardrails = await payoutGuardrails.mutateAsync({
+      amountUsd,
+      riskLevel: risk.risk.level,
+      method: tab === "gift" ? "gift_card" : tab,
+    });
+    if (!guardrails.guardrails.passesMin) return;
+    await createRedemption.mutateAsync({
+      method: tab === "gift" ? "gift_card" : tab,
+      amountUsd,
+      destination: tab === "paypal" ? paypalEmail : summary.method,
+    });
     setConfirmed({
       method: summary.method,
       amount: summary.amount,
@@ -144,8 +175,23 @@ export default function RedeemPage() {
               <Text style={styles.balanceValue}>{balanceUSD}</Text>
             </View>
             <Text style={styles.balanceCredits}>
-              {CREDITS_AVAILABLE.toLocaleString()} credits · 1 CR = $0.01
+              {availableCredits.toLocaleString()} confirmed credits · pending cannot be withdrawn
             </Text>
+            <View style={styles.redeemGuardrailRow}>
+              <View style={styles.redeemGuardrailPill}>
+                <Text style={styles.redeemGuardrailText}>Gift cards ${GIFT_MIN_USD}+</Text>
+              </View>
+              <View style={styles.redeemGuardrailPill}>
+                <Text style={styles.redeemGuardrailText}>Cash ${CASH_MIN_USD}+</Text>
+              </View>
+              <View style={styles.redeemGuardrailPill}>
+                <Text style={styles.redeemGuardrailText}>{shareLabel} share</Text>
+              </View>
+            </View>
+            <View style={styles.pendingLockRow}>
+              <Text style={styles.pendingLockText}>Pending ${((wallet?.pendingUsd ?? 0)).toFixed(2)}</Text>
+              <Text style={styles.pendingLockText}>Locked ${((wallet?.lockedUsd ?? 0)).toFixed(2)}</Text>
+            </View>
           </MotiView>
 
           {/* Tab picker */}
@@ -192,7 +238,7 @@ export default function RedeemPage() {
                       <View style={styles.denomRow}>
                         {GIFT_DENOMINATIONS.map((amt) => {
                           const required = amt * CR_PER_USD;
-                          const enabled = required <= CREDITS_AVAILABLE;
+                          const enabled = amt >= GIFT_MIN_USD && required <= availableCredits;
                           const active = giftDenomination === amt;
                           return (
                             <Pressable
@@ -245,6 +291,7 @@ export default function RedeemPage() {
                     onChangeEmail={setPaypalEmail}
                     amount={paypalAmount}
                     onChangeAmount={setPaypalAmount}
+                    availableCredits={availableCredits}
                   />
                 </MotiView>
               )}
@@ -409,11 +456,13 @@ function PayPalForm({
   onChangeEmail,
   amount,
   onChangeAmount,
+  availableCredits,
 }: {
   email: string;
   onChangeEmail: (s: string) => void;
   amount: number;
   onChangeAmount: (n: number) => void;
+  availableCredits: number;
 }) {
   const required = amount * CR_PER_USD;
   return (
@@ -437,7 +486,7 @@ function PayPalForm({
       <View style={styles.paypalAmountRow}>
         {PAYPAL_QUICK_AMOUNTS.map((amt) => {
           const reqd = amt * CR_PER_USD;
-          const enabled = reqd <= CREDITS_AVAILABLE;
+          const enabled = amt >= CASH_MIN_USD && reqd <= availableCredits;
           const active = amount === amt;
           return (
             <Pressable
@@ -643,6 +692,35 @@ const styles = StyleSheet.create({
     ...typography.medium,
     marginTop: 6,
     fontSize: 12,
+    color: "rgba(253,251,246,0.66)",
+  },
+  redeemGuardrailRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  redeemGuardrailPill: {
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    backgroundColor: "rgba(253,251,246,0.12)",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(253,251,246,0.2)",
+  },
+  redeemGuardrailText: {
+    ...typography.bold,
+    fontSize: 10,
+    color: "rgba(253,251,246,0.86)",
+  },
+  pendingLockRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 12,
+  },
+  pendingLockText: {
+    ...typography.semibold,
+    fontSize: 11,
     color: "rgba(253,251,246,0.66)",
   },
   tabRow: {

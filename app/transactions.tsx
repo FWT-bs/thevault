@@ -5,8 +5,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SubPage } from "../components/SubPage";
 import { GLASS, GLASS_SURFACE } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useWalletTransactions } from "../services/features/wallet";
 
-type TxStatus = "completed" | "pending" | "processing";
+type TxStatus = "completed" | "pending" | "processing" | "review" | "reversed";
 type TxKind = "in" | "out" | "bonus";
 
 interface Tx {
@@ -19,23 +20,12 @@ interface Tx {
   detail: string;
 }
 
-const TRANSACTIONS: Tx[] = [
-  { id: "t1", title: "Blackjack win", kind: "in", when: "Today · 9:42 PM", amount: "+420 CR", status: "completed", detail: "Hand #88421 · 1.5x payout" },
-  { id: "t2", title: "Cash out to bank", kind: "out", when: "Today · 7:10 PM", amount: "−$25.00", status: "processing", detail: "Wells Fargo •••• 8842" },
-  { id: "t3", title: "Daily streak bonus", kind: "bonus", when: "Today · 6:00 PM", amount: "+50 CR", status: "completed", detail: "Day 5 of 10" },
-  { id: "t4", title: "Slots spin", kind: "out", when: "Yesterday", amount: "−100 CR", status: "completed", detail: "Lucky Vault · 1 spin" },
-  { id: "t5", title: "Roulette win", kind: "in", when: "Yesterday", amount: "+1,240 CR", status: "completed", detail: "Black 22 · 35x" },
-  { id: "t6", title: "PayPal redemption", kind: "out", when: "Yesterday", amount: "−$10.00", status: "pending", detail: "alex@example.com" },
-  { id: "t7", title: "Welcome bonus", kind: "bonus", when: "2 days ago", amount: "+500 CR", status: "completed", detail: "First sign-up reward" },
-  { id: "t8", title: "Tournament payout", kind: "in", when: "4 days ago", amount: "+2,100 CR", status: "completed", detail: "Block Puzzle · 3rd place" },
-  { id: "t9", title: "Amazon gift card", kind: "out", when: "1 week ago", amount: "−$25.00", status: "completed", detail: "Sent to alex@example.com" },
-  { id: "t10", title: "Survey · Brand Pulse", kind: "in", when: "1 week ago", amount: "+220 CR", status: "completed", detail: "11 mins · Demographics" },
-];
-
 const STATUS_META: Record<TxStatus, { label: string; bg: string; tint: string }> = {
   completed: { label: "Done", bg: "#CDEFD8", tint: "#1F5E36" },
   pending: { label: "Pending", bg: "#F6D98A", tint: "#7A5F0A" },
   processing: { label: "Processing", bg: "#E5E7EB", tint: "#5B5F6A" },
+  review: { label: "Review", bg: "#FFD7C2", tint: "#7A1E2C" },
+  reversed: { label: "Reversed", bg: "#F4A4A4", tint: "#7A1E2C" },
 };
 
 const KIND_META: Record<TxKind, { icon: React.ComponentProps<typeof Ionicons>["name"]; tint: string; bg: string }> = {
@@ -44,16 +34,28 @@ const KIND_META: Record<TxKind, { icon: React.ComponentProps<typeof Ionicons>["n
   bonus: { icon: "sparkles", tint: GLASS.mustard, bg: "rgba(201,162,39,0.18)" },
 };
 
-const FILTERS = ["All", "Cash in", "Cash out", "Bonus"] as const;
+const FILTERS = ["All", "Pending", "Completed", "Cash out", "Review"] as const;
 
 export default function TransactionsPage() {
+  const { data: walletTransactions } = useWalletTransactions();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const source: Tx[] =
+    walletTransactions?.map((tx) => ({
+      id: tx.id,
+      title: tx.title,
+      kind: tx.kind as TxKind,
+      when: tx.occurredAt,
+      amount: `${tx.kind === "out" ? "−" : "+"}${tx.currency === "CR" ? `${Math.abs(tx.amount)} CR` : `$${Math.abs(tx.amount).toFixed(2)}`}`,
+      status: (tx.status === "failed" ? "review" : tx.status) as TxStatus,
+      detail: tx.detail,
+    })) ?? [];
 
-  const visible = TRANSACTIONS.filter((tx) => {
-    if (filter === "Cash in") return tx.kind === "in";
+  const visible = source.filter((tx) => {
+    if (filter === "Pending") return tx.status === "pending" || tx.status === "processing";
+    if (filter === "Completed") return tx.status === "completed";
     if (filter === "Cash out") return tx.kind === "out";
-    if (filter === "Bonus") return tx.kind === "bonus";
+    if (filter === "Review") return tx.status === "review" || tx.status === "reversed";
     return true;
   });
 
@@ -92,7 +94,12 @@ export default function TransactionsPage() {
       </View>
 
       <View style={styles.list}>
-        {visible.map((tx, i) => {
+        {visible.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No transactions yet</Text>
+            <Text style={styles.emptyText}>Credits, pending rewards, and cash outs will appear here once this account has activity.</Text>
+          </View>
+        ) : visible.map((tx, i) => {
           const meta = KIND_META[tx.kind];
           const status = STATUS_META[tx.status];
           const positive = tx.kind !== "out";
@@ -194,6 +201,24 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.12)",
     backgroundColor: "#FFFFFF",
     paddingHorizontal: 12,
+  },
+  emptyState: {
+    paddingVertical: 24,
+    paddingHorizontal: 8,
+  },
+  emptyTitle: {
+    ...typography.bold,
+    fontSize: 14,
+    color: GLASS.ink,
+    textAlign: "center",
+  },
+  emptyText: {
+    ...typography.semibold,
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 17,
+    color: GLASS.inkMuted,
+    textAlign: "center",
   },
   txRow: {
     paddingVertical: 14,

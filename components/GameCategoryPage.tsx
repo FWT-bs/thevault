@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Stack } from "expo-router";
+import { formatSharePercent } from "@thevault/domain";
+import { Stack, useRouter } from "expo-router";
 import { MotiView } from "moti";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -12,6 +13,9 @@ import {
 } from "../constants/gameCatalog";
 import { GLASS, GLASS_SURFACE } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useCatalog } from "../services/features/catalog";
+import { useVaultLevel } from "../services/features/vaultLevel";
+import { useOfferAttributionIngest } from "../services/features/offers";
 import TabScreen from "../app/_tab-screen";
 import { GlassSurface } from "./GlassSurface";
 
@@ -34,9 +38,15 @@ const PAGE_COPY: Record<CategoryId, { title: string; subtitle: string; kicker: s
 };
 
 export function GameCategoryPage({ category }: { category: CategoryId }) {
+  const router = useRouter();
+  const { data: catalogItems } = useCatalog();
+  const { data: vaultLevel } = useVaultLevel();
+  const offerAttribution = useOfferAttributionIngest();
   const tab = CATEGORY_TABS.find((item) => item.id === category) ?? CATEGORY_TABS[0];
   const copy = PAGE_COPY[category];
   const activities = GAME_ACTIVITIES.filter((activity) => activity.category === category);
+  const count = catalogItems?.filter((item) => item.category === category).length ?? activities.length;
+  const shareLabel = formatSharePercent(vaultLevel?.revenueShareBps ?? 3000);
 
   return (
     <>
@@ -67,7 +77,7 @@ export function GameCategoryPage({ category }: { category: CategoryId }) {
             <MaterialCommunityIcons name={tab.icon} size={28} color="#000000" />
           </View>
           <View style={styles.countPill}>
-            <Text style={styles.countPillText}>{activities.length}</Text>
+            <Text style={styles.countPillText}>{count}</Text>
           </View>
         </View>
         <Text style={styles.kicker}>{copy.kicker}</Text>
@@ -79,8 +89,30 @@ export function GameCategoryPage({ category }: { category: CategoryId }) {
 
       <View style={styles.listHeader}>
         <Text style={styles.sectionLabel}>Available now</Text>
-        <Text style={styles.sectionHint}>Tap any activity</Text>
+        <Text style={styles.sectionHint}>{category === "surveys" ? "Provider verified" : `${shareLabel} ad share`}</Text>
       </View>
+
+        <GlassSurface
+          tone="light"
+          radius={20}
+          intensity={34}
+          style={styles.shareRailOutline}
+          contentStyle={styles.shareRail}
+        >
+          <View style={styles.shareRailIcon}>
+            <Ionicons name={category === "surveys" ? "receipt-outline" : "play-circle-outline"} size={16} color={GLASS.steelDeep} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.shareRailTitle}>
+              {category === "surveys" ? "Completions verify before payout" : `Vault share: ${shareLabel}`}
+            </Text>
+            <Text style={styles.shareRailText}>
+              {category === "surveys"
+                ? "Offer rewards can stay pending while partner callbacks are checked."
+                : "Ad boosts estimate first and become available after verification."}
+            </Text>
+          </View>
+        </GlassSurface>
 
         {activities.map((activity, index) => (
           <MotiView
@@ -90,7 +122,25 @@ export function GameCategoryPage({ category }: { category: CategoryId }) {
             transition={{ type: "timing", duration: 420, delay: 90 + index * 80 }}
             style={styles.activityGap}
           >
-            <ActivityRow activity={activity} />
+            <ActivityRow
+              activity={activity}
+              onPress={() => {
+                if (category === "surveys") {
+                  void offerAttribution.mutateAsync({
+                    provider: "mock-offerwall",
+                    clickId: `clk-${Date.now()}`,
+                    offerId: activity.name.toLowerCase().replace(/\s+/g, "-"),
+                  });
+                  router.push("/offerwall");
+                  return;
+                }
+                if (category === "in-app") {
+                  router.push("/games-in-app");
+                  return;
+                }
+                router.push("/games-external");
+              }}
+            />
           </MotiView>
         ))}
       </TabScreen>
@@ -98,14 +148,14 @@ export function GameCategoryPage({ category }: { category: CategoryId }) {
   );
 }
 
-function ActivityRow({ activity }: { activity: GameActivity }) {
+function ActivityRow({ activity, onPress }: { activity: GameActivity; onPress: () => void }) {
   const isDark = activity.tone === "dark";
   return (
     <GlassSurface
       tone={activity.tone}
       radius={22}
       intensity={36}
-      onPress={() => {}}
+      onPress={onPress}
       style={styles.sectionOutline22}
       contentStyle={styles.activityRowContent}
     >
@@ -244,6 +294,38 @@ const styles = StyleSheet.create({
   sectionHint: {
     ...typography.semibold,
     fontSize: 11,
+    color: GLASS.inkMuted,
+  },
+  shareRailOutline: {
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  shareRail: {
+    padding: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  shareRailIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 13,
+    backgroundColor: "rgba(169,229,255,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareRailTitle: {
+    ...typography.bold,
+    fontSize: 13,
+    color: GLASS.ink,
+  },
+  shareRailText: {
+    ...typography.semibold,
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 15,
     color: GLASS.inkMuted,
   },
   activityGap: {

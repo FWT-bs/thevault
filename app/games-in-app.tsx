@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Stack, useRouter } from "expo-router";
+import { formatSharePercent } from "@thevault/domain";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { HeaderBackButton } from "@react-navigation/elements";
 import { MotiView } from "moti";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +19,9 @@ import TabScreen from "./_tab-screen";
 import { GlassSurface } from "../components/GlassSurface";
 import { GLASS, GLASS_SURFACE } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useCatalog } from "../services/features/catalog";
+import { useCompleteGameSession, useStartGameSession } from "../services/features/gameplay";
+import { useVaultLevel } from "../services/features/vaultLevel";
 
 const AD_AFTER_LAUNCHES = 5;
 const AD_DURATION_SECONDS = 5;
@@ -302,6 +306,37 @@ const GRID_GAMES: GridGame[] = [
     fresh: true,
   },
   {
+    id: "block-blast",
+    title: "Block Blast",
+    variant: "icon",
+    icon: "view-grid-plus-outline",
+    bg: "#00E5FF",
+    players: "1 player",
+    badge: "NEW",
+    fresh: true,
+  },
+  {
+    id: "bricks-vs-balls",
+    title: "Bricks vs Balls",
+    variant: "scene",
+    icon: "target",
+    bg: "#FF4D8D",
+    sceneIcons: ["circle-double", "wall", "star-four-points"],
+    players: "1 player",
+    badge: "LIVE",
+    live: true,
+  },
+  {
+    id: "color-stack",
+    title: "Color Stack",
+    variant: "icon",
+    icon: "layers-triple-outline",
+    bg: "#8BFF5A",
+    players: "1 player",
+    badge: "NEW",
+    fresh: true,
+  },
+  {
     id: "blackjack",
     title: "Blackjack",
     variant: "scene",
@@ -326,6 +361,10 @@ const FILTERS: { id: FilterId; label: string }[] = [
 export default function InAppGamesPage() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const { data: catalogItems } = useCatalog();
+  const { data: vaultLevel } = useVaultLevel();
+  const startSession = useStartGameSession();
+  const completeSession = useCompleteGameSession();
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterId>("all");
@@ -333,6 +372,7 @@ export default function InAppGamesPage() {
   const [sessionCredits, setSessionCredits] = useState(24);
   const [adVisible, setAdVisible] = useState(false);
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
+  const shareLabel = formatSharePercent(vaultLevel?.revenueShareBps ?? 3000);
 
   const cardWidth = useMemo(
     () =>
@@ -355,8 +395,16 @@ export default function InAppGamesPage() {
     });
   }, [query, filter]);
 
+  // Clear the highlighted card when the user returns to this screen
+  // (otherwise it stays orange-bordered forever after a launch).
+  useFocusEffect(
+    useCallback(() => {
+      return () => setActiveGameId(null);
+    }, []),
+  );
+
   const handleLaunch = useCallback(
-    (game: GridGame) => {
+    async (game: GridGame) => {
       if (adVisible) return;
       setActiveGameId(game.id);
       launchCountRef.current += 1;
@@ -371,8 +419,23 @@ export default function InAppGamesPage() {
       if (game.id === "blackjack") {
         router.push("/blackjack");
       }
+      if (game.id === "block-blast") {
+        router.push("/block-blast");
+      }
+      if (game.id === "bricks-vs-balls") {
+        router.push("/bricks-vs-balls");
+      }
+      if (game.id === "color-stack") {
+        router.push("/color-stack");
+      }
+      try {
+        const started = await startSession.mutateAsync({ gameId: game.id, modeId: "classic" });
+        await completeSession.mutateAsync({ sessionId: started.session.id, score: Math.floor(Math.random() * 800) + 100 });
+      } catch {
+        // gameplay API is scaffolded; keep launch responsive if unavailable
+      }
     },
-    [adVisible, router],
+    [adVisible, router, startSession, completeSession],
   );
 
   return (
@@ -412,16 +475,27 @@ export default function InAppGamesPage() {
         <Text style={styles.eyebrowKicker}>Library</Text>
         <Text style={styles.eyebrowTitle}>IN APP GAMES</Text>
         <Text style={styles.eyebrowSub}>
-          {filtered.length} of {GRID_GAMES.length} games · earn credits as you play
+          {filtered.length} of {catalogItems?.filter((c) => c.category === "in-app").length ?? GRID_GAMES.length} games · {shareLabel} ad-share boosts
         </Text>
       </MotiView>
+
+      <View style={styles.adShareStrip}>
+        <Ionicons name="shield-checkmark-outline" size={16} color={GLASS.steelDeep} />
+        <Text style={styles.adShareStripText}>
+          Complete games to unlock rewarded ads. Estimated rewards stay pending until verified.
+        </Text>
+      </View>
 
       <MotiView
         from={{ opacity: 0, translateY: 10 }}
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: "timing", duration: 420, delay: 80 }}
       >
-        <SearchBar value={query} onChangeText={setQuery} />
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder={`Search ${GRID_GAMES.length} in-app games`}
+        />
       </MotiView>
 
       <MotiView
@@ -477,9 +551,11 @@ export default function InAppGamesPage() {
 function SearchBar({
   value,
   onChangeText,
+  placeholder,
 }: {
   value: string;
   onChangeText: (value: string) => void;
+  placeholder?: string;
 }) {
   return (
     <GlassSurface
@@ -493,7 +569,7 @@ function SearchBar({
       <TextInput
         value={value}
         onChangeText={onChangeText}
-        placeholder="Search 24 in-app games"
+        placeholder={placeholder ?? "Search games"}
         placeholderTextColor={GLASS.inkFaint}
         autoCapitalize="none"
         autoCorrect={false}
@@ -747,19 +823,26 @@ function DummyAdOverlay({
   onComplete: () => void;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(AD_DURATION_SECONDS);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     if (!visible) return;
     setSecondsLeft(AD_DURATION_SECONDS);
-    const interval = setInterval(() => {
-      setSecondsLeft((current) => Math.max(current - 1, 0));
-    }, 1000);
-    const done = setTimeout(onComplete, AD_DURATION_SECONDS * 1000);
-    return () => {
-      clearInterval(interval);
-      clearTimeout(done);
-    };
-  }, [visible, onComplete]);
+    const interval = setInterval(
+      () => setSecondsLeft((current) => Math.max(0, current - 1)),
+      1000,
+    );
+    return () => clearInterval(interval);
+  }, [visible]);
+
+  // Fire onComplete in a separate effect so we never trigger a setState in
+  // another component while this one is rendering (the updater of setSecondsLeft).
+  useEffect(() => {
+    if (!visible || secondsLeft > 0) return;
+    const t = setTimeout(() => onCompleteRef.current?.(), 200);
+    return () => clearTimeout(t);
+  }, [visible, secondsLeft]);
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
@@ -821,6 +904,26 @@ const styles = StyleSheet.create({
     color: GLASS.inkMuted,
     letterSpacing: -0.1,
     textAlign: "center",
+  },
+  adShareStrip: {
+    marginTop: 10,
+    marginBottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+    backgroundColor: "rgba(255,255,255,0.82)",
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+  },
+  adShareStripText: {
+    ...typography.semibold,
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+    color: GLASS.inkMuted,
   },
 
   searchOutline: {

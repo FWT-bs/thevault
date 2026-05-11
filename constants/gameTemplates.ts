@@ -24,6 +24,44 @@ export type GameTask = {
 
 export type GameArtKind = "blackjack" | "slots" | "puzzle" | "generic";
 
+export type GameLaunchIcon =
+  | "rocket"
+  | "target"
+  | "calendar"
+  | "rules"
+  | "fairPlay"
+  | "rewards"
+  | "practice"
+  | "cards"
+  | "shield";
+
+export type GameLaunchRow = {
+  icon: GameLaunchIcon;
+  title: string;
+  body: string;
+  accentText?: string;
+  badge?: string;
+  timer?: string;
+};
+
+export type GameLaunchFooterItem = {
+  icon: GameLaunchIcon;
+  label: string;
+};
+
+export type GameLaunchConfig = {
+  heroTitle: string;
+  heroAccentTitle?: string;
+  heroDescription: string;
+  balanceLabel: string;
+  levelLabel: string;
+  shareLabel: string;
+  primaryLabel: string;
+  secondaryLabel?: string;
+  rows: GameLaunchRow[];
+  footer: GameLaunchFooterItem[];
+};
+
 export type GameConfig = {
   id: string;
   name: string;
@@ -36,6 +74,7 @@ export type GameConfig = {
   stats: GameStat[];
   tasks: GameTask[];
   tips: string[];
+  launch: GameLaunchConfig;
 };
 
 export const GT = {
@@ -84,6 +123,37 @@ export const GAME_CONFIGS: Record<string, GameConfig> = {
       "Dealer must hit until 17.",
       "Insurance is rarely a good bet.",
     ],
+    launch: {
+      heroTitle: "Blackjack",
+      heroAccentTitle: "Royale",
+      heroDescription: "Win rounds. Unlock ads.\nEarn verified rewards.",
+      balanceLabel: "$4.82",
+      levelLabel: "Gold",
+      shareLabel: "45%",
+      primaryLabel: "Play Now",
+      secondaryLabel: "Practice Mode",
+      rows: [
+        {
+          icon: "rocket",
+          title: "Today's Boost",
+          body: "Watch 1 ad after 3 rounds to claim",
+          accentText: "+45% share reward.",
+          badge: "+45% SHARE",
+        },
+        {
+          icon: "target",
+          title: "Daily Challenge",
+          body: "Win 2 rounds:",
+          accentText: "+$0.03 cap",
+          timer: "12:18:45",
+        },
+      ],
+      footer: [
+        { icon: "rules", label: "Rules" },
+        { icon: "fairPlay", label: "Fair Play" },
+        { icon: "rewards", label: "Rewards" },
+      ],
+    },
   },
   slots: {
     id: "slots",
@@ -114,6 +184,37 @@ export const GAME_CONFIGS: Record<string, GameConfig> = {
       "Jackpot Hour doubles all wins.",
       "Match three Vault icons to trigger bonus.",
     ],
+    launch: {
+      heroTitle: "Vault",
+      heroAccentTitle: "Slots",
+      heroDescription: "Spin quick reels. Unlock boosts.\nStack verified rewards.",
+      balanceLabel: "$4.82",
+      levelLabel: "Gold",
+      shareLabel: "45%",
+      primaryLabel: "Play Now",
+      secondaryLabel: "Practice Spin",
+      rows: [
+        {
+          icon: "rocket",
+          title: "Spin Boost",
+          body: "Play 15 spins to unlock",
+          accentText: "+20% share reward.",
+          badge: "+20% SHARE",
+        },
+        {
+          icon: "target",
+          title: "Daily Jackpot",
+          body: "Land 3 Vault icons:",
+          accentText: "+75 CR",
+          timer: "09:42:18",
+        },
+      ],
+      footer: [
+        { icon: "rules", label: "Rules" },
+        { icon: "fairPlay", label: "Fair Play" },
+        { icon: "rewards", label: "Rewards" },
+      ],
+    },
   },
   puzzle: {
     id: "puzzle",
@@ -144,5 +245,36 @@ export const GAME_CONFIGS: Record<string, GameConfig> = {
       "Daily puzzles never run out of moves.",
       "Holding L-shapes is usually a trap.",
     ],
+    launch: {
+      heroTitle: "Block",
+      heroAccentTitle: "Puzzle",
+      heroDescription: "Clear lines. Build streaks.\nEarn reward progress.",
+      balanceLabel: "$4.82",
+      levelLabel: "Gold",
+      shareLabel: "45%",
+      primaryLabel: "Play Now",
+      secondaryLabel: "Practice Board",
+      rows: [
+        {
+          icon: "rocket",
+          title: "Line Boost",
+          body: "Clear 50 lines today to claim",
+          accentText: "+20 CR.",
+          badge: "+20 CR",
+        },
+        {
+          icon: "target",
+          title: "Daily Puzzle",
+          body: "Solve today's board:",
+          accentText: "+25 CR",
+          timer: "14:08:31",
+        },
+      ],
+      footer: [
+        { icon: "rules", label: "Rules" },
+        { icon: "fairPlay", label: "Fair Play" },
+        { icon: "rewards", label: "Rewards" },
+      ],
+    },
   },
 };

@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { LiquidGlassButton } from "../components/LiquidGlassButton";
 import { CardSurface, SectionTitle, SubPage } from "../components/SubPage";
 import { GLASS } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useMe } from "../services/features/auth";
 
 interface Field {
   key: string;
@@ -15,19 +16,29 @@ interface Field {
   keyboard?: "default" | "email-address" | "phone-pad";
 }
 
-const FIELDS: Field[] = [
-  { key: "name", label: "Display name", initial: "alex", icon: "person-outline" },
-  { key: "email", label: "Email", initial: "alex@example.com", icon: "mail-outline", keyboard: "email-address" },
-  { key: "phone", label: "Phone", initial: "+1 (415) 555 0142", icon: "call-outline", keyboard: "phone-pad" },
-  { key: "birthday", label: "Birthday", initial: "1996 · 04 · 12", icon: "calendar-outline" },
-  { key: "country", label: "Country", initial: "United States", icon: "earth-outline" },
+const FIELDS: Omit<Field, "initial">[] = [
+  { key: "name", label: "Display name", icon: "person-outline" },
+  { key: "email", label: "Email", icon: "mail-outline", keyboard: "email-address" },
+  { key: "phone", label: "Phone", icon: "call-outline", keyboard: "phone-pad" },
+  { key: "birthday", label: "Birthday", icon: "calendar-outline" },
+  { key: "country", label: "Country", icon: "earth-outline" },
 ];
 
 export default function PersonalInfoPage() {
-  const [values, setValues] = useState<Record<string, string>>(
-    () => Object.fromEntries(FIELDS.map((f) => [f.key, f.initial])),
+  const { data: me } = useMe();
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(FIELDS.map((f) => [f.key, "Not added"])),
   );
   const [editing, setEditing] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValues((prev) => ({
+      ...prev,
+      name: me?.displayName ?? prev.name,
+      email: me?.email ?? "Not added",
+      phone: me?.phone ?? "Not added",
+    }));
+  }, [me]);
 
   return (
     <SubPage
@@ -88,7 +99,7 @@ export default function PersonalInfoPage() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Street</Text>
-            <Text style={styles.value}>421 Mission Street</Text>
+            <Text style={styles.value}>Not added</Text>
           </View>
           <Ionicons name="pencil" size={16} color={GLASS.inkMuted} />
         </View>
@@ -98,7 +109,7 @@ export default function PersonalInfoPage() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>City / Postal</Text>
-            <Text style={styles.value}>San Francisco, CA · 94105</Text>
+            <Text style={styles.value}>Not added</Text>
           </View>
           <Ionicons name="pencil" size={16} color={GLASS.inkMuted} />
         </View>

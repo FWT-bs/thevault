@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { formatSharePercent } from "@thevault/domain";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -6,13 +7,14 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FlatCard } from "../components/FlatCard";
 import { V2 } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useMe } from "../services/features/auth";
+import { usePaymentMethods } from "../services/features/paymentMethods";
+import { useVaultLevel } from "../services/features/vaultLevel";
 import TabScreen from "./_tab-screen";
 
 const ACCOUNT_ROWS = [
   { label: "Personal info", icon: "account-circle-outline", route: "/personal-info" },
   { label: "Verification", icon: "shield-check", detail: "Level 2", route: "/verification" },
-  { label: "Payment methods", icon: "credit-card-outline", detail: "3", route: "/payment-methods" },
-  { label: "Loyalty tier", icon: "trophy-outline", detail: "Gold", route: "/tier" },
 ] as const;
 
 const PREF_ROWS = [
@@ -23,6 +25,18 @@ const PREF_ROWS = [
 
 export default function ProfileTab() {
   const router = useRouter();
+  const { data: me } = useMe();
+  const { data: paymentMethods } = usePaymentMethods();
+  const { data: vaultLevel } = useVaultLevel();
+  const tierName = vaultLevel?.currentTier.shortName ?? "Starter";
+  const shareLabel = formatSharePercent(vaultLevel?.revenueShareBps ?? 3000);
+  const progressPct = Math.round((vaultLevel?.progressToNext ?? 0) * 100);
+  const displayName = me?.displayName ?? "Player";
+  const accountRows = [
+    ...ACCOUNT_ROWS,
+    { label: "Payment methods", icon: "credit-card-outline", detail: `${paymentMethods?.length ?? 0}`, route: "/payment-methods" },
+    { label: "Vault Level", icon: "trophy-outline", detail: `${tierName} · ${shareLabel}`, route: "/vault-level" },
+  ] as const;
 
   return (
     <TabScreen
@@ -35,34 +49,34 @@ export default function ProfileTab() {
       <FlatCard radius={24} pad={18} style={{ marginBottom: 14 }}>
         <View style={styles.heroRow}>
           <View style={styles.avatarWrap}>
-            <Text style={styles.avatarLetter}>A</Text>
+            <Text style={styles.avatarLetter}>{displayName.slice(0, 1).toUpperCase()}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.name}>alex</Text>
-            <Text style={styles.meta}>Member since 2024 · Vault Gold</Text>
+            <Text style={styles.name}>{displayName}</Text>
+            <Text style={styles.meta}>{me?.email ?? "Vault account"} · {tierName} · {shareLabel} share</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={V2.faint} />
         </View>
         <View style={styles.tierBlock}>
           <View style={styles.tierTop}>
-            <Text style={styles.tierLabel}>Tier progress</Text>
-            <Text style={styles.tierLabel}>68% to Platinum</Text>
+            <Text style={styles.tierLabel}>Vault Level progress</Text>
+            <Text style={styles.tierLabel}>{progressPct}% to {vaultLevel?.nextTier?.shortName ?? "Bronze"}</Text>
           </View>
           <View style={styles.tierTrack}>
-            <View style={styles.tierFill} />
+            <View style={[styles.tierFill, { width: `${progressPct}%` }]} />
           </View>
         </View>
       </FlatCard>
 
       <View style={styles.statsRow}>
-        <StatTile label="Played" value="128" icon="game-controller-outline" tint={V2.cyanSoft} iconColor={V2.cyan} />
-        <StatTile label="Won" value="74" icon="trophy-outline" tint={V2.amberSoft} iconColor={V2.amber} />
-        <StatTile label="Win rate" value="58%" icon="trending-up" tint={V2.cyanSoft} iconColor={V2.cyan} />
+        <StatTile label="Verified ads" value={`${vaultLevel?.lifetimeVerifiedAds ?? 0}`} icon="play-circle-outline" tint={V2.cyanSoft} iconColor={V2.cyan} />
+        <StatTile label="Trust" value={`${vaultLevel?.trustScore ?? 50}`} icon="shield-checkmark-outline" tint={V2.amberSoft} iconColor={V2.amber} />
+        <StatTile label="Share" value={shareLabel} icon="trending-up" tint={V2.cyanSoft} iconColor={V2.cyan} />
       </View>
 
       <SectionHeader title="Account" color={V2.cyan} />
       <FlatCard radius={20} pad={0} style={{ marginBottom: 14 }}>
-        {ACCOUNT_ROWS.map((row, i) => (
+        {accountRows.map((row, i) => (
           <MenuRow
             key={row.label}
             label={row.label}
@@ -70,7 +84,7 @@ export default function ProfileTab() {
             detail={"detail" in row ? row.detail : undefined}
             bg={V2.cyanSoft}
             color={V2.cyan}
-            isLast={i === ACCOUNT_ROWS.length - 1}
+            isLast={i === accountRows.length - 1}
             onPress={() => router.push(row.route)}
           />
         ))}

@@ -25,7 +25,9 @@
       "Bash(mkdir -p /tmp/streak-design)",
       "Bash(tar -xzf /Users/fwt/.claude/projects/-Users-fwt-Downloads-thevault-main/92fdcf33-97cb-4549-8be9-31107d4b5f46/tool-results/webfetch-1778099790591-dhq9f2.bin -C /tmp/streak-design)",
       "Read(//private/tmp/streak-design/vault/chats/**)",
-      "Read(//private/tmp/streak-design/vault/**)"
+      "Read(//private/tmp/streak-design/vault/**)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(awk NR==1 || NR==1826 {print NR\": \"$0} *)"
     ]
   }
 }

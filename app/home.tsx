@@ -1,12 +1,18 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { formatSharePercent } from "@thevault/domain";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
 import { FlatCard } from "../components/FlatCard";
 import { V2 } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
 import { streakClaim } from "../lib/streakClaim";
+import { useRewardedGrant } from "../services/features/monetization";
+import { useStreakSummary } from "../services/features/streak";
+import { useVaultLevel } from "../services/features/vaultLevel";
+import { useRefreshWallet, useWalletBalance } from "../services/features/wallet";
 import TabScreen from "./_tab-screen";
 
 const RECOMMENDED = [
@@ -21,16 +27,74 @@ const CLAIMED_GREEN_INK = "#3D8F5A";
 /** Pastel fill for day check circles */
 const CLAIMED_CHECK_CIRCLE_BG = "#8FDFAC";
 const SHARE_WATCH_BG = "#000000"; // Black
+const EARNINGS_GOAL = 50;
+
+function EarningCircle({ earnings, goal }: { earnings: number; goal: number }) {
+  const radius = 45;
+  const strokeWidth = 8;
+  const circumference = 2 * Math.PI * radius;
+  const gapPercent = 4;
+  const drawablePercent = 100 - gapPercent;
+  const percentage = Math.round((earnings / goal) * 100);
+  const displayPercent = Math.min(percentage, drawablePercent);
+  const strokeDashoffset = circumference - (displayPercent / 100) * circumference;
+  const progressColor = percentage >= 100 ? "#FFD700" : "#007AFF";
+
+  return (
+    <View style={styles.earningCircleContainer}>
+      <Svg width={110} height={110} viewBox="0 0 110 110">
+        <Circle
+          cx="55"
+          cy="55"
+          r={radius}
+          stroke="#E5E5EA"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+        />
+        <Circle
+          cx="55"
+          cy="55"
+          r={radius}
+          stroke={progressColor}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          transform="rotate(90 55 55)"
+        />
+      </Svg>
+      <View style={styles.earningCircleTextWrap}>
+        <Text style={styles.earningCircleGoalText}>${goal}</Text>
+        <Text style={styles.earningCirclePercentText}>{percentage}% to goal</Text>
+      </View>
+    </View>
+  );
+}
 
 export default function HomeTab() {
   const router = useRouter();
+  const rewardedGrant = useRewardedGrant();
+  const refreshWallet = useRefreshWallet();
+  const { data: walletBalance } = useWalletBalance();
+  const { data: vaultLevel } = useVaultLevel();
+  const { data: streakSummary } = useStreakSummary();
+  const [lastGrant, setLastGrant] = useState<string | null>(null);
   const claimed = useSyncExternalStore(
     streakClaim.subscribe,
     streakClaim.isClaimed,
     streakClaim.isClaimed,
   );
   const [animatedEarnings, setAnimatedEarnings] = useState(0);
-  const targetEarnings = 24.8;
+  const targetEarnings = Math.min(walletBalance?.usdBalance ?? 0, 99.99);
+  const shareLabel = vaultLevel ? formatSharePercent(vaultLevel.revenueShareBps) : "30%";
+  const nextTierLabel = vaultLevel?.nextTier?.shortName ?? "Bronze";
+  const progressPct = Math.round((vaultLevel?.progressToNext ?? 0) * 100);
+  const capRemaining = vaultLevel?.capRemainingUsd ?? 0.5;
+
+  useEffect(() => {
+    void streakClaim.syncFromApi();
+  }, []);
 
   useEffect(() => {
     let frame = 0;
@@ -50,7 +114,7 @@ export default function HomeTab() {
 
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, []);
+  }, [targetEarnings]);
 
   const earningsWhole = Math.floor(animatedEarnings);
   const earningsCents = Math.round((animatedEarnings - earningsWhole) * 100)
@@ -86,13 +150,16 @@ export default function HomeTab() {
     >
       <FlatCard radius={26} pad={20} style={{ marginBottom: 14 }}>
         <Text style={styles.heroLabel}>Today's earnings</Text>
-        <View style={styles.heroValueRow}>
-          <Text style={styles.heroPlus}>+</Text>
-          <Text style={styles.heroWhole}>${earningsWhole}</Text>
-          <Text style={styles.heroFraction}>.{earningsCents}</Text>
+        <View style={styles.heroEarningsRow}>
+          <View style={styles.heroValueRow}>
+            <Text style={styles.heroPlus}>+</Text>
+            <Text style={styles.heroWhole}>${earningsWhole}</Text>
+            <Text style={styles.heroFraction}>.{earningsCents}</Text>
+          </View>
+          <EarningCircle earnings={animatedEarnings} goal={EARNINGS_GOAL} />
         </View>
         <View style={styles.growthPill}>
-          <Text style={styles.growthText}>↑ 18% vs yesterday</Text>
+          <Text style={styles.growthText}>{targetEarnings > 0 ? "↑ 18% vs yesterday" : "$0.00 today"}</Text>
         </View>
         <View style={styles.heroButtons}>
           <View style={{ flex: 1 }}>
@@ -110,9 +177,56 @@ export default function HomeTab() {
         </View>
       </FlatCard>
 
+      <FlatCard radius={22} pad={18} style={styles.vaultLevelCard}>
+          <View style={styles.vaultLevelTop}>
+            <View>
+              <Text style={styles.vaultKicker}>Vault Level</Text>
+              <Text style={styles.vaultTierName}>
+                {vaultLevel?.currentTier.name ?? "Starter"}
+              </Text>
+            </View>
+            <View style={styles.sharePill}>
+              <Ionicons name="analytics-outline" size={13} color={V2.cyanInk} />
+              <Text style={styles.sharePillText}>Your share {shareLabel}</Text>
+            </View>
+          </View>
+          <View style={styles.shareMathRow}>
+            <View style={styles.shareMathItem}>
+              <Text style={styles.shareMathValue}>${capRemaining.toFixed(2)}</Text>
+              <Text style={styles.shareMathLabel}>cap left today</Text>
+            </View>
+            <View style={styles.shareMathDivider} />
+            <View style={styles.shareMathItem}>
+              <Text style={styles.shareMathValue}>{vaultLevel?.adsWatchedToday ?? 0}</Text>
+              <Text style={styles.shareMathLabel}>ads watched</Text>
+            </View>
+            <View style={styles.shareMathDivider} />
+            <View style={styles.shareMathItem}>
+              <Text style={styles.shareMathValue}>{vaultLevel?.trustScore ?? 50}</Text>
+              <Text style={styles.shareMathLabel}>trust score</Text>
+            </View>
+          </View>
+          <View style={styles.levelProgressTop}>
+            <Text style={styles.levelProgressText}>{progressPct}% to {nextTierLabel}</Text>
+            <Text style={styles.levelProgressText}>{vaultLevel?.nextTier ? formatSharePercent(vaultLevel.nextTier.revenueShareBps) : shareLabel}</Text>
+          </View>
+          <View style={styles.levelTrack}>
+            <View style={[styles.levelFill, { width: `${progressPct}%` }]} />
+          </View>
+          <View style={styles.levelActions}>
+            <Pressable onPress={() => router.push("/games-tab")} style={styles.watchEarnButton}>
+              <Ionicons name="play-circle" size={15} color="#FFFFFF" />
+              <Text style={styles.watchEarnText}>Watch & Earn</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/vault-level")} style={styles.viewShareButton}>
+              <Text style={styles.viewShareText}>View share</Text>
+            </Pressable>
+          </View>
+      </FlatCard>
+
       <FlatCard radius={20} pad={20} style={{ marginBottom: 12 }}>
         <Text style={[styles.streakTitle, { textAlign: "center", marginBottom: 18 }]}>
-          7-day streak · +25% bonus
+          {`${streakSummary?.currentDays ?? 0}-day streak · +${streakSummary?.bonusPercent ?? 0}% bonus`}
         </Text>
 
         <View style={styles.streakCalendarRow}>
@@ -181,9 +295,9 @@ export default function HomeTab() {
 
       <FlatCard radius={20} pad={20} style={{ marginBottom: 16 }}>
         <View style={styles.statsRow}>
-          <MetricCard value="$2,450.75" label="Current Balance" icon="wallet-outline" />
-          <MetricCard value="128" label="Ads Watched" icon="game-controller-outline" />
-          <MetricCard value="$74" label="Total Earnings" icon="trophy-outline" />
+          <MetricCard value={`$${(walletBalance?.availableUsd ?? 0).toFixed(2)}`} label="Available" icon="wallet-outline" />
+          <MetricCard value={`$${(walletBalance?.pendingUsd ?? 0).toFixed(2)}`} label="Pending" icon="time-outline" />
+          <MetricCard value={`$${(walletBalance?.lifetimeGeneratedUsd ?? 0).toFixed(2)}`} label="Generated" icon="trophy-outline" />
         </View>
 
         <Pressable
@@ -211,7 +325,7 @@ export default function HomeTab() {
                 // Share action - add your share logic here
               }}
             >
-              <Ionicons name="share" size={14} color="#FFFFFF" />
+              <Ionicons name="share-social" size={13} color="#FFFFFF" />
               <Text style={styles.extraActionButtonText}>Share</Text>
             </Pressable>
           </FlatCard>
@@ -222,14 +336,20 @@ export default function HomeTab() {
               <Ionicons name="play-circle-outline" size={16} color={V2.amber} />
             </View>
             <Text style={styles.quickActionTitle}>Watch extra ad</Text>
-            <Text style={styles.quickActionMeta}>Get a quick CR boost</Text>
+            <Text style={styles.quickActionMeta}>
+              {lastGrant ?? `${shareLabel} share · pending first`}
+            </Text>
             <Pressable
               style={styles.extraActionButton}
-              onPress={() => {
-                // Watch extra ad action
+              onPress={async () => {
+                const result = await rewardedGrant.mutateAsync({
+                  placement: "home_quick_boost",
+                  adNetworkRef: `mock-${Date.now()}`,
+                });
+                setLastGrant(`+$${result.grant.estimatedRewardUsd.toFixed(4)} pending`);
+                await refreshWallet.mutateAsync();
               }}
             >
-              <Ionicons name="eye" size={14} color="#FFFFFF" />
               <Text style={styles.extraActionButtonText}>Watch</Text>
             </Pressable>
           </FlatCard>
@@ -327,6 +447,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: 4,
   },
+  heroEarningsRow: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   heroPlus: {
     ...typography.semibold,
     fontSize: 42,
@@ -346,6 +473,25 @@ const styles = StyleSheet.create({
     fontSize: 30,
     color: V2.muted,
     marginBottom: 8,
+  },
+  earningCircleContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  earningCircleTextWrap: {
+    position: "absolute",
+    alignItems: "center",
+  },
+  earningCircleGoalText: {
+    ...typography.bold,
+    fontSize: 18,
+    color: V2.ink,
+  },
+  earningCirclePercentText: {
+    ...typography.semibold,
+    fontSize: 10,
+    color: V2.muted,
+    marginTop: 2,
   },
   growthPill: {
     alignSelf: "flex-start",
@@ -392,6 +538,131 @@ const styles = StyleSheet.create({
     ...typography.bold,
     fontSize: 16,
     color: "#FFFFFF",
+  },
+  vaultLevelCard: {
+    marginBottom: 12,
+    backgroundColor: "#F7FCFF",
+  },
+  vaultLevelTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  vaultKicker: {
+    ...typography.bold,
+    fontSize: 10,
+    color: V2.cyan,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  vaultTierName: {
+    ...typography.bold,
+    marginTop: 4,
+    fontSize: 20,
+    color: V2.ink,
+    letterSpacing: -0.5,
+  },
+  sharePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: V2.cyanSoft,
+  },
+  sharePillText: {
+    ...typography.bold,
+    fontSize: 11,
+    color: V2.cyanInk,
+  },
+  shareMathRow: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V2.hairlineStrong,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  shareMathItem: {
+    flex: 1,
+  },
+  shareMathValue: {
+    ...typography.bold,
+    fontSize: 17,
+    color: V2.ink,
+    letterSpacing: -0.4,
+  },
+  shareMathLabel: {
+    ...typography.semibold,
+    marginTop: 2,
+    fontSize: 10,
+    color: V2.muted,
+  },
+  shareMathDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 34,
+    backgroundColor: V2.hairlineStrong,
+    marginHorizontal: 10,
+  },
+  levelProgressTop: {
+    marginTop: 14,
+    marginBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  levelProgressText: {
+    ...typography.bold,
+    fontSize: 12,
+    color: V2.muted,
+  },
+  levelTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(0,0,0,0.08)",
+    overflow: "hidden",
+  },
+  levelFill: {
+    height: "100%",
+    backgroundColor: V2.cyan,
+  },
+  levelActions: {
+    marginTop: 14,
+    flexDirection: "row",
+    gap: 10,
+  },
+  watchEarnButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 21,
+    backgroundColor: "#000000",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 7,
+  },
+  watchEarnText: {
+    ...typography.bold,
+    fontSize: 14,
+    color: "#FFFFFF",
+  },
+  viewShareButton: {
+    minHeight: 42,
+    borderRadius: 21,
+    paddingHorizontal: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: V2.hairlineStrong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewShareText: {
+    ...typography.bold,
+    fontSize: 13,
+    color: V2.ink,
   },
   walletButton: {
     minHeight: 52,

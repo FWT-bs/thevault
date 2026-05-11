@@ -252,7 +252,7 @@ export default function Page() {
             </Text>
           </MotiView>
 
-          {/* Continue CTA — Liquid Glass (docs/hero-glass-button.md) */}
+          {/* Continue CTA — Liquid Glass (see THE_VAULT_UI_GUIDE.md) */}
           <MotiView
             from={{ opacity: 0, translateY: 14 }}
             animate={{ opacity: 1, translateY: 0 }}
@@ -662,4 +662,3 @@ function LiquidGlassSocialButton({
     </Pressable>
   );
 }
-

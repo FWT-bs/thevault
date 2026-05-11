@@ -1,10 +1,11 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { SectionTitle, SubPage } from "../components/SubPage";
 import { GLASS } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useAddPaymentMethod, usePaymentMethods } from "../services/features/paymentMethods";
 
 interface PaymentMethod {
   id: string;
@@ -15,12 +16,6 @@ interface PaymentMethod {
   isDefault?: boolean;
 }
 
-const INITIAL_METHODS: PaymentMethod[] = [
-  { id: "paypal", brand: "PayPal", detail: "alex@example.com", icon: "currency-usd", color: "#A9E5FF", isDefault: true },
-  { id: "visa", brand: "Visa debit", detail: "•••• 4421", icon: "credit-card-outline", color: "#DED1FB" },
-  { id: "btc", brand: "Bitcoin wallet", detail: "bc1q...x9p2", icon: "bitcoin", color: "#FFD7C2" },
-];
-
 const ADD_OPTIONS: { id: string; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"]; color: string }[] = [
   { id: "card", label: "Debit / credit card", icon: "credit-card-outline", color: "#A9E5FF" },
   { id: "paypal", label: "Add PayPal", icon: "currency-usd", color: "#CDEFD8" },
@@ -29,16 +24,17 @@ const ADD_OPTIONS: { id: string; label: string; icon: React.ComponentProps<typeo
 ];
 
 export default function PaymentMethodsPage() {
-  const [methods, setMethods] = useState<PaymentMethod[]>(INITIAL_METHODS);
-
-  const setDefault = (id: string) => {
-    setMethods((prev) =>
-      prev.map((m) => ({ ...m, isDefault: m.id === id })),
-    );
-  };
-  const remove = (id: string) => {
-    setMethods((prev) => prev.filter((m) => m.id !== id));
-  };
+  const apiMethodsQuery = usePaymentMethods();
+  const addMethod = useAddPaymentMethod();
+  const visibleMethods: PaymentMethod[] =
+    apiMethodsQuery.data?.map((m) => ({
+          id: m.id,
+          brand: m.methodType,
+          detail: m.destinationMasked,
+          icon: m.methodType.includes("crypto") ? "bitcoin" : m.methodType.includes("card") ? "credit-card-outline" : "currency-usd",
+          color: "#A9E5FF",
+          isDefault: m.isDefault,
+        })) ?? [];
 
   return (
     <SubPage
@@ -48,7 +44,11 @@ export default function PaymentMethodsPage() {
     >
       <SectionTitle>On file</SectionTitle>
       <View style={{ gap: 10 }}>
-        {methods.map((m) => (
+        {visibleMethods.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No payment methods yet.</Text>
+          </View>
+        ) : visibleMethods.map((m) => (
           <View key={m.id} style={styles.methodCard}>
             <View style={[styles.methodIcon, { backgroundColor: m.color }]}>
               <MaterialCommunityIcons name={m.icon} size={22} color="#000000" />
@@ -64,26 +64,6 @@ export default function PaymentMethodsPage() {
                 ) : null}
               </View>
               <Text style={styles.methodDetail}>{m.detail}</Text>
-              <View style={styles.methodActions}>
-                {!m.isDefault ? (
-                  <Pressable
-                    onPress={() => setDefault(m.id)}
-                    hitSlop={6}
-                    style={({ pressed }) => pressed && { opacity: 0.7 }}
-                  >
-                    <Text style={styles.actionLink}>Set as default</Text>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  onPress={() => remove(m.id)}
-                  hitSlop={6}
-                  style={({ pressed }) => pressed && { opacity: 0.7 }}
-                >
-                  <Text style={[styles.actionLink, { color: GLASS.oxblood }]}>
-                    Remove
-                  </Text>
-                </Pressable>
-              </View>
             </View>
           </View>
         ))}
@@ -94,6 +74,12 @@ export default function PaymentMethodsPage() {
         {ADD_OPTIONS.map((opt) => (
           <Pressable
             key={opt.id}
+            onPress={() => {
+              void addMethod.mutateAsync({
+                methodType: opt.id,
+                destinationMasked: opt.label,
+              });
+            }}
             style={({ pressed }) => [
               styles.addRow,
               pressed && { opacity: 0.78 },
@@ -122,6 +108,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.12)",
     backgroundColor: "#FFFFFF",
+  },
+  emptyCard: {
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.12)",
+    backgroundColor: "#FFFFFF",
+  },
+  emptyText: {
+    ...typography.semibold,
+    fontSize: 13,
+    color: GLASS.inkMuted,
   },
   methodIcon: {
     width: 48,

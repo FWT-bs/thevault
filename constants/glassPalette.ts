@@ -84,10 +84,7 @@ export const GLASS_SURFACE = {
   shadowSoft: "rgba(56,189,248,0.22)",
 } as const;
 
-/**
- * Design tokens from "Vault - Liquid Glass v2.html".
- * Used by the v2 restyle effort while keeping existing GLASS tokens intact.
- */
+/** V2 design tokens. See THE_VAULT_UI_GUIDE.md for usage rules. */
 export const V2 = {
   bg: "#FAFAF7",
   card: "#FFFFFF",

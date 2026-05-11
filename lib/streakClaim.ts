@@ -1,19 +1,36 @@
-// Tiny in-memory store so the streak-claim popup can flag the daily streak
-// as claimed before navigating back, and the home screen can re-render
-// without re-mount. No persistence — the flag resets on app reload, which
-// matches what a real "daily" claim would do server-side anyway.
+import { apiRequest, createIdempotencyKey } from "../services/apiClient";
 
-let claimed = false;
+let claimed: boolean | null = null;
 const subscribers = new Set<() => void>();
+
+function notify() {
+  subscribers.forEach((fn) => fn());
+}
 
 export const streakClaim = {
   isClaimed(): boolean {
-    return claimed;
+    return claimed ?? false;
   },
   setClaimed(value: boolean) {
-    if (claimed === value) return;
+    if (claimed === value && claimed !== null) return;
     claimed = value;
-    subscribers.forEach((fn) => fn());
+    notify();
+  },
+  async syncFromApi() {
+    const data = await apiRequest<{ streak: { claimable: boolean } }>("/streak/summary");
+    claimed = !data.streak.claimable;
+    notify();
+    return claimed;
+  },
+  async claimViaApi() {
+    const idempotencyKey = createIdempotencyKey("streak-claim-lib");
+    await apiRequest<{ awardedCredits: number }>("/streak/claim", {
+      method: "POST",
+      idempotencyKey,
+      body: JSON.stringify({ idempotencyKey }),
+    });
+    claimed = true;
+    notify();
   },
   subscribe(listener: () => void): () => void {
     subscribers.add(listener);

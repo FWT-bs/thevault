@@ -139,7 +139,7 @@ export default function HelpCenterPage() {
           color="#FFD7C2"
           tint={GLASS.copper}
           label="Phone support"
-          hint="Vault Gold members · M–F 9–5 PT"
+          hint="Gold and Platinum members · M-F 9-5 PT"
         />
       </View>
     </SubPage>

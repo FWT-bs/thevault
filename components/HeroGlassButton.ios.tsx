@@ -13,9 +13,7 @@ import { glassEffect } from "@expo/ui/swift-ui/modifiers";
 
 import { typography } from "../constants/typography";
 
-/**
- * iOS 26 Liquid Glass pill via SwiftUI `glassEffect`. See `docs/hero-glass-button.md`.
- */
+/** iOS 26 Liquid Glass pill via SwiftUI `glassEffect`. See `THE_VAULT_UI_GUIDE.md`. */
 
 type HeroSize = "compact" | "regular" | "large";
 

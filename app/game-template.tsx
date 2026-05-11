@@ -4,33 +4,58 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MotiView } from "moti";
 
-import { GameLanding } from "../components/v2/GameLanding";
+import { GameLaunchPage } from "../components/v2/GameLaunchPage";
 import { GameLoader } from "../components/v2/GameLoader";
 import { GAME_CONFIGS, GT } from "../constants/gameTemplates";
 
-type Stage = "loading" | "landing";
+type Stage = "launch" | "loading";
 
 const GAME_IDS = Object.keys(GAME_CONFIGS);
 
-// Host for the in-app game template — equivalent of `Vault - In-App Game.html`.
-// The HTML mock rendered loader + landing in two side-by-side phones; on
-// iOS we run them as a single-screen flow with a top switcher and a
-// crossfade between stages.
+// Preview host for the generic in-app game template. Real games with gameplay
+// should use a thin route and move implementation under `components/games/`.
 export default function GameTemplateRoute() {
   const router = useRouter();
   const [gameId, setGameId] = useState<string>(GAME_IDS[0]);
-  const [stage, setStage] = useState<Stage>("loading");
+  const [stage, setStage] = useState<Stage>("launch");
   const cfg = GAME_CONFIGS[gameId];
 
   const switchGame = (id: string) => {
     setGameId(id);
-    setStage("loading");
+    setStage("launch");
+  };
+
+  const finishLoading = () => {
+    if (cfg.id === "blackjack") {
+      router.push("/blackjack?start=playing");
+      return;
+    }
+
+    console.log("[game-template] loaded", cfg.id);
+    setStage("launch");
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: GT.bg }}>
       <View style={{ flex: 1 }}>
-        {stage === "loading" ? (
+        {stage === "launch" ? (
+          <MotiView
+            key={`launch-${gameId}`}
+            from={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ type: "timing", duration: 200 }}
+            style={StyleSheet.absoluteFill}
+          >
+            <GameLaunchPage
+              gameConfig={cfg}
+              onBack={() => {
+                if (router.canGoBack()) router.back();
+                else router.replace("/games-in-app");
+              }}
+              onPlay={() => setStage("loading")}
+            />
+          </MotiView>
+        ) : (
           <MotiView
             key={`loader-${gameId}`}
             from={{ opacity: 0 }}
@@ -38,40 +63,12 @@ export default function GameTemplateRoute() {
             transition={{ type: "timing", duration: 200 }}
             style={StyleSheet.absoluteFill}
           >
-            <GameLoader gameConfig={cfg} onReady={() => setStage("landing")} />
-          </MotiView>
-        ) : (
-          <MotiView
-            key={`landing-${gameId}`}
-            from={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ type: "timing", duration: 220 }}
-            style={StyleSheet.absoluteFill}
-          >
-            <GameLanding
-              gameConfig={cfg}
-              onClose={() => {
-                if (router.canGoBack()) router.back();
-                else router.replace("/games-in-app");
-              }}
-              onPlay={(mode) => {
-                // Hand off to gameplay for games that have a real implementation.
-                if (cfg.id === "blackjack") {
-                  router.push("/blackjack");
-                  return;
-                }
-                console.log("[game-template] play", cfg.id, mode.id);
-              }}
-              onLeaderboard={() => console.log("[game-template] leaderboard")}
-              onStats={() => console.log("[game-template] stats")}
-              onSettings={() => console.log("[game-template] settings")}
-            />
+            <GameLoader gameConfig={cfg} onReady={finishLoading} />
           </MotiView>
         )}
       </View>
 
-      {/* Game switcher — only relevant on this preview host, mirrors the
-          `.switcher` in Vault - In-App Game.html. */}
+      {/* Game switcher — only relevant on this preview host. */}
       <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.switcherWrap}>
         <View style={styles.switcher}>
           {Object.values(GAME_CONFIGS).map((g) => {

@@ -1,11 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
-import { HeaderBackButton } from "@react-navigation/elements";
 import React from "react";
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import TabScreen from "../app/_tab-screen";
-import { GLASS } from "../constants/glassPalette";
+import { GLASS, V2 } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
 
 export function SubPage({
@@ -14,7 +13,7 @@ export function SubPage({
   children,
   backTo,
   backLabel = "Profile",
-  backgroundColor = "#FFFFFF",
+  backgroundColor = V2.bg,
   contentContainerStyle,
   headerAccessory,
 }: {
@@ -32,21 +31,8 @@ export function SubPage({
     <>
       <Stack.Screen
         options={{
-          headerShown: true,
+          headerShown: false,
           title,
-          headerBackTitle: backLabel,
-          headerTintColor: "#000000",
-          headerShadowVisible: false,
-          headerLeft: (props) => (
-            <HeaderBackButton
-              {...props}
-              label={backLabel}
-              onPress={() => {
-                if (router.canGoBack()) router.back();
-                else router.replace((backTo ?? "/profile-tab") as never);
-              }}
-            />
-          ),
         }}
       />
       <TabScreen
@@ -56,6 +42,20 @@ export function SubPage({
         titleColor={GLASS.ink}
         subtitleColor={GLASS.inkMuted}
         contentContainerStyle={contentContainerStyle}
+        headerLeading={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Back to ${backLabel}`}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace((backTo ?? "/profile-tab") as never);
+            }}
+            style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.72 }]}
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={20} color="#000000" />
+          </Pressable>
+        }
         headerAccessory={headerAccessory}
       >
         {children}
@@ -131,6 +131,20 @@ export function CardSurface({
 }
 
 const styles = StyleSheet.create({
+  backButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.1)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
   sectionTitle: {
     ...typography.bold,
     marginTop: 18,

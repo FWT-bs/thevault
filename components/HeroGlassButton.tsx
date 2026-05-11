@@ -15,7 +15,7 @@ import { typography } from "../constants/typography";
 
 /**
  * Non-iOS fallback for `HeroGlassButton`. iOS uses `HeroGlassButton.ios.tsx`.
- * See `docs/hero-glass-button.md`.
+ * See `THE_VAULT_UI_GUIDE.md`.
  */
 
 type HeroSize = "compact" | "regular" | "large";

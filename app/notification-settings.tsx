@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { CardSurface, SectionTitle, SubPage } from "../components/SubPage";
 import { GLASS } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useMe } from "../services/features/auth";
 
 interface ToggleRow {
   key: string;
@@ -36,7 +37,7 @@ const SECTIONS: { title: string; rows: ToggleRow[] }[] = [
     title: "Channels",
     rows: [
       { key: "push", label: "Push notifications", hint: "On this device", icon: "phone-portrait-outline", iconBg: "rgba(56,189,248,0.14)", iconTint: GLASS.steelDeep, initial: true },
-      { key: "email", label: "Email", hint: "alex@example.com", icon: "mail-outline", iconBg: "rgba(56,189,248,0.14)", iconTint: GLASS.steelDeep, initial: true },
+      { key: "email", label: "Email", hint: "Not added", icon: "mail-outline", iconBg: "rgba(56,189,248,0.14)", iconTint: GLASS.steelDeep, initial: true },
       { key: "sms", label: "SMS", hint: "Only for high-value cashouts", icon: "chatbox-outline", iconBg: "rgba(56,189,248,0.14)", iconTint: GLASS.steelDeep, initial: false },
     ],
   },
@@ -45,12 +46,14 @@ const SECTIONS: { title: string; rows: ToggleRow[] }[] = [
 const QUIET_PRESETS = ["Off", "10 PM – 7 AM", "11 PM – 8 AM", "Custom"] as const;
 
 export default function NotificationSettingsPage() {
+  const { data: me } = useMe();
   const [values, setValues] = useState<Record<string, boolean>>(() => {
     const out: Record<string, boolean> = {};
     SECTIONS.forEach((s) => s.rows.forEach((r) => (out[r.key] = r.initial)));
     return out;
   });
   const [quiet, setQuiet] = useState<string>("10 PM – 7 AM");
+  const emailHint = me?.email ?? "Not added";
 
   return (
     <SubPage
@@ -75,7 +78,7 @@ export default function NotificationSettingsPage() {
                 </View>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.label}>{row.label}</Text>
-                  <Text style={styles.hint}>{row.hint}</Text>
+                  <Text style={styles.hint}>{row.key === "email" ? emailHint : row.hint}</Text>
                 </View>
                 <Switch
                   value={values[row.key]}

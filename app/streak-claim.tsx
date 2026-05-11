@@ -70,15 +70,12 @@ export default function StreakClaimRoute() {
   const fireWrapTop = insets.top + 40;
   const coinSourceY = fireWrapTop + 300 * 0.65;
 
-  // Bottom block height tracks the styles below — caption + chip + cta
-  // with a gap of 12 between siblings and an extra 28pt margin above
-  // the cta so it sits clearly below the chip.
-  const ctaH = 68;
-  const chipH = 50;
-  const chipToCtaGap = 12 + 28;
-  const chipBottomFromScreenBottom =
-    insets.bottom + 16 + ctaH + chipToCtaGap + chipH / 2;
-  const chipCenterY = winH - chipBottomFromScreenBottom;
+  // Chip is top-anchored just under the title:
+  // paddingTop(fireWrapTop) + fireWrap(300) + copy.marginTop(18)
+  // + title block (~52) + bottom.marginTop(28) + caption(~16) + gap(12)
+  // + chipH/2 (25). The CTA is now pinned independently to the bottom
+  // of the safe area, so it no longer factors into the chip's position.
+  const chipCenterY = fireWrapTop + 300 + 18 + 52 + 28 + 16 + 12 + 25;
   const dropDistance = Math.max(280, chipCenterY - coinSourceY);
 
   // Count up the reward 0 → REWARD with a cubic ease-out — same curve
@@ -108,8 +105,13 @@ export default function StreakClaimRoute() {
     };
   }, []);
 
-  const onContinue = () => {
-    streakClaim.setClaimed(true);
+  const onContinue = async () => {
+    try {
+      await streakClaim.claimViaApi();
+    } catch {
+      // Fallback keeps UX responsive when API is unavailable.
+      streakClaim.setClaimed(true);
+    }
     if (router.canGoBack()) router.back();
     else router.replace("/(tabs)/home-tab");
   };
@@ -179,7 +181,7 @@ export default function StreakClaimRoute() {
           styles.content,
           {
             paddingTop: fireWrapTop,
-            paddingBottom: insets.bottom + 16,
+            paddingBottom: insets.bottom + 24,
           },
         ]}
       >
@@ -319,9 +321,7 @@ export default function StreakClaimRoute() {
           <Text style={styles.subtitle}>You're on a {STREAK}-day streak</Text>
         </MotiView>
 
-        {/* Reward + CTA — explicit gap above, no `marginTop: auto`,
-            so the CTA stays well clear of the home indicator on all
-            iPhone sizes. */}
+        {/* Reward chip — keeps its original spot just under the title. */}
         <MotiView
           from={{ opacity: 0, translateY: 14 }}
           animate={{ opacity: 1, translateY: 0 }}
@@ -333,14 +333,27 @@ export default function StreakClaimRoute() {
             <Coin size={22} />
             <Text style={styles.rewardAmount}>+{displayAmount} CR</Text>
           </View>
+        </MotiView>
+      </View>
 
+      {/* CTA — absolutely positioned at the bottom of the screen, last
+          sibling in the tree so it sits on top of everything else. No
+          MotiView wrapper here: a stuck `opacity: 0` from the animation
+          would hide the white pill entirely, and we need it visible
+          unconditionally. */}
+      <View style={[styles.ctaWrap, { bottom: insets.bottom + 56 }]}>
+        <View style={styles.cta}>
           <Pressable
             onPress={onContinue}
-            style={({ pressed }) => [styles.cta, pressed ? styles.ctaPressed : null]}
+            android_ripple={{ color: "rgba(0,0,0,0.08)" }}
+            style={({ pressed }) => [
+              styles.ctaInner,
+              pressed ? styles.ctaPressed : null,
+            ]}
           >
             <Text style={styles.ctaLabel}>Continue</Text>
           </Pressable>
-        </MotiView>
+        </View>
       </View>
     </View>
   );
@@ -732,6 +745,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  ctaWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 100,
+    elevation: 100,
+  },
   rewardCaption: {
     fontSize: 11,
     fontWeight: "700",
@@ -762,25 +783,34 @@ const styles = StyleSheet.create({
   },
 
   cta: {
-    alignSelf: "stretch",
-    minHeight: 68,
-    paddingVertical: 18,
-    marginTop: 28,
-    borderRadius: 34,
+    width: "55%",
+    minHeight: 52,
+    borderRadius: 26,
     backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(0,0,0,0.12)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  ctaInner: {
+    flexDirection: "row",
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#FFFFFF",
-    shadowOpacity: 0.45,
-    shadowRadius: 32,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  ctaPressed: { opacity: 0.85 },
+  ctaPressed: { opacity: 0.6 },
   ctaLabel: {
-    fontSize: 19,
+    flex: 1,
+    fontSize: 16,
     fontWeight: "800",
-    color: "#0A0A0C",
+    color: "#111111",
     letterSpacing: -0.3,
+    textAlign: "center",
   },
 });

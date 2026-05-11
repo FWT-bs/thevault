@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LiquidGlassCard } from "../components/LiquidGlassCard";
 import { GLASS } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { useWalletTransactions } from "../services/features/wallet";
 import TabScreen from "./_tab-screen";
 
 type ActivityKind = "earn" | "redeem" | "streak" | "survey" | "boost";
@@ -19,19 +20,6 @@ interface ActivityItem {
   group: "Today" | "This week" | "Earlier";
 }
 
-const ACTIVITY: ActivityItem[] = [
-  { id: "a1", kind: "earn", text: "Earned playing Block Puzzle", detail: "12 rounds · 9 mins", amount: "+48 CR", group: "Today" },
-  { id: "a2", kind: "boost", text: "2x boost activated", detail: "Auto-applied on Block Puzzle", amount: "Boost", group: "Today" },
-  { id: "a3", kind: "streak", text: "Day 5 streak claimed", detail: "Bonus credited at 6:00 PM", amount: "+50 CR", group: "Today" },
-  { id: "a4", kind: "survey", text: "Brand Pulse survey complete", detail: "11 mins · Demographics", amount: "+220 CR", group: "Today" },
-  { id: "a5", kind: "earn", text: "Word Ladder · 4-streak", detail: "Best of the day", amount: "+90 CR", group: "This week" },
-  { id: "a6", kind: "redeem", text: "PayPal redemption", detail: "Sent to alex@example.com", amount: "−$10.00", group: "This week" },
-  { id: "a7", kind: "earn", text: "Slots big win", detail: "5x multiplier hit", amount: "+1,240 CR", group: "This week" },
-  { id: "a8", kind: "streak", text: "Day 3 streak claimed", detail: "Tuesday check-in", amount: "+30 CR", group: "Earlier" },
-  { id: "a9", kind: "survey", text: "Quick Poll · Streaming", detail: "3 mins · Lifestyle", amount: "+45 CR", group: "Earlier" },
-  { id: "a10", kind: "redeem", text: "Amazon gift card", detail: "$25 emailed instantly", amount: "−$25.00", group: "Earlier" },
-];
-
 const META: Record<ActivityKind, { icon: React.ComponentProps<typeof Ionicons>["name"]; bg: string; tint: string }> = {
   earn: { icon: "game-controller", bg: "#A9E5FF", tint: GLASS.steelDeep },
   redeem: { icon: "wallet", bg: "#F4A4A4", tint: GLASS.oxblood },
@@ -42,10 +30,46 @@ const META: Record<ActivityKind, { icon: React.ComponentProps<typeof Ionicons>["
 
 const FILTERS = ["All", "Earn", "Redeem", "Bonus"] as const;
 
-export default function ActivityPage() {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
+function sameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
 
-  const visible = ACTIVITY.filter((a) => {
+function groupFor(value: string): ActivityItem["group"] {
+  const date = new Date(value);
+  const now = new Date();
+  if (sameDay(date, now)) return "Today";
+  return now.getTime() - date.getTime() <= 7 * 24 * 60 * 60 * 1000 ? "This week" : "Earlier";
+}
+
+export default function ActivityPage() {
+  const { data: walletTransactions } = useWalletTransactions();
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
+  const source: ActivityItem[] =
+    walletTransactions?.map((tx) => {
+      const kind: ActivityKind = tx.kind === "out" ? "redeem" : tx.kind === "bonus" ? "boost" : "earn";
+      return {
+        id: tx.id,
+        kind,
+        text: tx.title,
+        detail: tx.detail,
+        amount: `${tx.kind === "out" ? "−" : "+"}${tx.currency === "CR" ? `${Math.abs(tx.amount).toLocaleString()} CR` : `$${Math.abs(tx.amount).toFixed(2)}`}`,
+        group: groupFor(tx.occurredAt),
+      };
+    }) ?? [];
+  const todayCredits =
+    walletTransactions
+      ?.filter((tx) => tx.kind !== "out" && groupFor(tx.occurredAt) === "Today")
+      .reduce((sum, tx) => sum + (tx.currency === "CR" ? tx.amount : 0), 0) ?? 0;
+  const weekCredits =
+    walletTransactions
+      ?.filter((tx) => tx.kind !== "out" && groupFor(tx.occurredAt) !== "Earlier")
+      .reduce((sum, tx) => sum + (tx.currency === "CR" ? tx.amount : 0), 0) ?? 0;
+  const cashedOutUsd =
+    walletTransactions
+      ?.filter((tx) => tx.kind === "out")
+      .reduce((sum, tx) => sum + (tx.currency === "CR" ? tx.amount / 100 : tx.amount), 0) ?? 0;
+
+  const visible = source.filter((a) => {
     if (filter === "Earn") return a.kind === "earn";
     if (filter === "Redeem") return a.kind === "redeem";
     if (filter === "Bonus") return a.kind === "streak" || a.kind === "boost" || a.kind === "survey";
@@ -70,17 +94,17 @@ export default function ActivityPage() {
         <View style={styles.summaryCard}>
           <View style={styles.summaryBlock}>
             <Text style={styles.summaryLabel}>Today</Text>
-            <Text style={styles.summaryValue}>+318 CR</Text>
+            <Text style={styles.summaryValue}>+{todayCredits.toLocaleString()} CR</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryBlock}>
             <Text style={styles.summaryLabel}>This week</Text>
-            <Text style={styles.summaryValue}>+1,650 CR</Text>
+            <Text style={styles.summaryValue}>+{weekCredits.toLocaleString()} CR</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryBlock}>
             <Text style={styles.summaryLabel}>Cashed out</Text>
-            <Text style={styles.summaryValue}>$35.00</Text>
+            <Text style={styles.summaryValue}>${cashedOutUsd.toFixed(2)}</Text>
           </View>
         </View>
 
@@ -103,6 +127,15 @@ export default function ActivityPage() {
           })}
         </View>
       </LiquidGlassCard>
+
+      {visible.length === 0 ? (
+        <View style={{ marginTop: 22 }}>
+          <LiquidGlassCard cornerRadius={22} innerPadding={18}>
+            <Text style={styles.emptyTitle}>No activity yet</Text>
+            <Text style={styles.emptyText}>Wallet credits, bonuses, and redemptions will appear here after this account has activity.</Text>
+          </LiquidGlassCard>
+        </View>
+      ) : null}
 
       {(["Today", "This week", "Earlier"] as const).map((group) => {
         const rows = grouped[group];
@@ -207,6 +240,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: GLASS.inkMuted,
     letterSpacing: -0.1,
+  },
+  emptyTitle: {
+    ...typography.bold,
+    fontSize: 14,
+    color: GLASS.ink,
+    textAlign: "center",
+  },
+  emptyText: {
+    ...typography.semibold,
+    marginTop: 6,
+    fontSize: 12,
+    lineHeight: 17,
+    color: GLASS.inkMuted,
+    textAlign: "center",
   },
   groupTitle: {
     ...typography.bold,

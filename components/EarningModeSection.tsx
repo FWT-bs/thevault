@@ -75,7 +75,7 @@ function SectionHeader({
 }
 
 // ----------------------------------------------------------------------
-// Category CTAs — Liquid Glass play control (see docs/hero-glass-button.md).
+// Category CTAs — Liquid Glass play control (see THE_VAULT_UI_GUIDE.md).
 // Per-section tints: blue = In-App, yellow = Partner, green = Surveys.
 type CtaTheme = "blue" | "yellow" | "green";
 

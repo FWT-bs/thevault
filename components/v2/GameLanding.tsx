@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Text,
   View,
-  type GestureResponderEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MotiView } from "moti";
@@ -85,7 +84,7 @@ export function GameLanding({
         {/* Centered content stack */}
         <View style={styles.center}>
           {/* Big title block */}
-          <View style={{ alignItems: "center" }}>
+          <View style={styles.centerTitleBlock}>
             <Text style={[styles.eyebrow, { color: cfg.accentInk }]}>
               VAULT · IN-APP GAME
             </Text>
@@ -141,8 +140,7 @@ export function GameLanding({
 
           {/* Big PLAY button */}
           <Pressable
-            onPress={(e: GestureResponderEvent) => {
-              e?.preventDefault?.();
+            onPress={() => {
               if (selected) onPlay?.(selected);
             }}
             style={({ pressed }) => [
@@ -181,7 +179,11 @@ export function GameLanding({
         {/* Daily tasks tab — middle-left edge */}
         <Pressable
           onPress={() => setTasksOpen(true)}
-          style={({ pressed }) => [styles.tasksTab, pressed && { opacity: 0.85 }]}
+          style={({ pressed }) => [
+            styles.tasksTab,
+            { transform: [{ translateY: -28 }] },
+            pressed && { opacity: 0.85 },
+          ]}
           hitSlop={6}
         >
           <View style={[styles.tasksGlyph, { backgroundColor: GT.amberSoft }]}>
@@ -448,8 +450,12 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     paddingHorizontal: 20,
-    alignItems: "center",
+    alignItems: "stretch",
     justifyContent: "center",
+  },
+  centerTitleBlock: {
+    alignItems: "center",
+    alignSelf: "stretch",
   },
   eyebrow: {
     fontSize: 11,
@@ -474,11 +480,12 @@ const styles = StyleSheet.create({
     width: 170,
     height: 120,
     marginTop: 18,
+    alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
   },
 
-  modesBlock: { width: "100%", marginTop: 18 },
+  modesBlock: { width: "100%", alignSelf: "stretch", marginTop: 18 },
   modesEyebrow: {
     fontSize: 10,
     fontWeight: "700",
@@ -500,6 +507,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "transparent",
   },
   modeBtnActive: {
@@ -522,6 +530,7 @@ const styles = StyleSheet.create({
 
   playBtn: {
     width: "100%",
+    alignSelf: "stretch",
     height: 64,
     marginTop: 14,
     borderRadius: 32,
@@ -543,6 +552,7 @@ const styles = StyleSheet.create({
 
   actions: {
     width: "100%",
+    alignSelf: "stretch",
     flexDirection: "row",
     gap: 8,
     marginTop: 12,
@@ -582,7 +592,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     top: "46%",
-    transform: [{ translateY: -28 }],
     backgroundColor: "#FFFFFF",
     borderWidth: 0.5,
     borderLeftWidth: 0,
