@@ -10,7 +10,7 @@ import { V2 } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
 import { useVaultLevel } from "../services/features/vaultLevel";
 import { useWalletBalance, useWalletTransactions } from "../services/features/wallet";
-import TabScreen from "./_tab-screen";
+import TabScreen from "../components/TabScreen";
 
 export default function WalletTab() {
   const router = useRouter();

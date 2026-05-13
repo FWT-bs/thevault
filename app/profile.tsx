@@ -1,16 +1,18 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatSharePercent } from "@thevault/domain";
 import { useRouter } from "expo-router";
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { FlatCard } from "../components/FlatCard";
 import { V2 } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
+import { signOut } from "../services/auth/providers";
+import { useSession } from "../services/auth/SessionProvider";
 import { useMe } from "../services/features/auth";
 import { usePaymentMethods } from "../services/features/paymentMethods";
 import { useVaultLevel } from "../services/features/vaultLevel";
-import TabScreen from "./_tab-screen";
+import TabScreen from "../components/TabScreen";
 
 const ACCOUNT_ROWS = [
   { label: "Personal info", icon: "account-circle-outline", route: "/personal-info" },
@@ -28,10 +30,31 @@ export default function ProfileTab() {
   const { data: me } = useMe();
   const { data: paymentMethods } = usePaymentMethods();
   const { data: vaultLevel } = useVaultLevel();
+  const { session } = useSession();
+  const [signingOut, setSigningOut] = useState(false);
   const tierName = vaultLevel?.currentTier.shortName ?? "Starter";
   const shareLabel = formatSharePercent(vaultLevel?.revenueShareBps ?? 3000);
   const progressPct = Math.round((vaultLevel?.progressToNext ?? 0) * 100);
-  const displayName = me?.displayName ?? "Player";
+  const displayName = me?.displayName ?? session?.user?.email ?? "Player";
+  const contactLine =
+    me?.email ?? session?.user?.email ?? session?.user?.phone ?? "Vault account";
+
+  const handleSignOut = () => {
+    Alert.alert("Sign out?", "You'll need to sign back in to keep earning.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign out",
+        style: "destructive",
+        onPress: async () => {
+          setSigningOut(true);
+          const result = await signOut();
+          setSigningOut(false);
+          if (!result.ok) Alert.alert("Sign out failed", result.message);
+          // Auth router in _layout sees the cleared session and routes to /.
+        },
+      },
+    ]);
+  };
   const accountRows = [
     ...ACCOUNT_ROWS,
     { label: "Payment methods", icon: "credit-card-outline", detail: `${paymentMethods?.length ?? 0}`, route: "/payment-methods" },
@@ -53,7 +76,7 @@ export default function ProfileTab() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.meta}>{me?.email ?? "Vault account"} · {tierName} · {shareLabel} share</Text>
+            <Text style={styles.meta}>{contactLine} · {tierName} · {shareLabel} share</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={V2.faint} />
         </View>
@@ -91,7 +114,7 @@ export default function ProfileTab() {
       </FlatCard>
 
       <SectionHeader title="Preferences" color={V2.amber} />
-      <FlatCard radius={20} pad={0}>
+      <FlatCard radius={20} pad={0} style={{ marginBottom: 14 }}>
         {PREF_ROWS.map((row, i) => (
           <MenuRow
             key={row.label}
@@ -105,6 +128,43 @@ export default function ProfileTab() {
           />
         ))}
       </FlatCard>
+
+      <SectionHeader title="Support" color={V2.muted} />
+      <FlatCard radius={20} pad={0} style={{ marginBottom: 14 }}>
+        <MenuRow
+          label="Help center"
+          icon="help-circle-outline"
+          bg="#F4F4F2"
+          color={V2.muted}
+          isLast={false}
+          onPress={() => router.push("/help-center")}
+        />
+        <MenuRow
+          label="Activity"
+          icon="history"
+          bg="#F4F4F2"
+          color={V2.muted}
+          isLast={true}
+          onPress={() => router.push("/activity")}
+        />
+      </FlatCard>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Sign out"
+        disabled={signingOut}
+        onPress={handleSignOut}
+        style={({ pressed }) => [
+          styles.signOutButton,
+          pressed && { opacity: 0.7 },
+          signingOut && { opacity: 0.5 },
+        ]}
+      >
+        <Ionicons name="log-out-outline" size={18} color="#B91C1C" />
+        <Text style={styles.signOutText}>
+          {signingOut ? "Signing out…" : "Sign out"}
+        </Text>
+      </Pressable>
     </TabScreen>
   );
 }
@@ -310,5 +370,22 @@ const styles = StyleSheet.create({
     ...typography.semibold,
     fontSize: 13,
     color: V2.muted,
+  },
+  signOutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 52,
+    borderRadius: 26,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+    marginBottom: 30,
+  },
+  signOutText: {
+    ...typography.bold,
+    fontSize: 15,
+    color: "#B91C1C",
   },
 });

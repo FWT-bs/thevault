@@ -14,7 +14,16 @@ export function useStartGameSession() {
 
 export function useCompleteGameSession() {
   return useMutation({
-    mutationFn: async (input: { sessionId: string; score: number }) =>
+    mutationFn: async (input: {
+      sessionId: string;
+      score: number;
+      // Optional fields used by the Unity host so the backend can enforce
+      // per-game sanity bounds (see DEFAULT_UNITY_GAME_BOUNDS in
+      // @thevault/contracts). Existing RN games omit these and the server
+      // skips bounds validation.
+      gameId?: string;
+      durationMs?: number;
+    }) =>
       apiRequest<{ result: { id: string; rewardsCredits: number } }>("/gameplay/complete", {
         method: "POST",
         body: JSON.stringify(input),

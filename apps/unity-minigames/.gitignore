@@ -1,0 +1,39 @@
+# Unity-generated folders. These are recreated by the Editor on first open.
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Memory captures and crash logs
+sysinfo.txt
+*.stackdump
+crashlytics-build.properties
+
+# Visual Studio / Rider / VSCode
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity asset metadata is REQUIRED in source control. Do NOT ignore .meta files.
+# (Listed here as a reminder, not a rule.)
+
+# Unity-as-a-Library export targets (built into the Expo iOS/Android shells)
+UnityLibrary/
+unityLibrary/

@@ -1,4 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { loadLocalEnv } from "./env";
+
+loadLocalEnv();
 
 let adminClient: SupabaseClient | null = null;
 
@@ -9,22 +12,30 @@ export function isMockUserId(userId: string): boolean {
 }
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(process.env.SUPABASE_URL && getSupabaseServerKey());
 }
 
 export function getSupabaseAdmin(): SupabaseClient {
   if (!isSupabaseConfigured()) {
-    throw new Error("Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+    throw new Error(
+      "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY.",
+    );
   }
-  adminClient ??= createClient(
-    process.env.SUPABASE_URL as string,
-    process.env.SUPABASE_SERVICE_ROLE_KEY as string,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
+
+  const serverKey = getSupabaseServerKey();
+  if (!serverKey) {
+    throw new Error("Supabase server key is missing.");
+  }
+
+  adminClient ??= createClient(process.env.SUPABASE_URL as string, serverKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
     },
-  );
+  });
   return adminClient;
+}
+
+function getSupabaseServerKey(): string | undefined {
+  return process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 }

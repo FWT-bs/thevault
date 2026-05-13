@@ -3,7 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import React from "react";
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import TabScreen from "../app/_tab-screen";
+import TabScreen from "./TabScreen";
 import { GLASS, V2 } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
 

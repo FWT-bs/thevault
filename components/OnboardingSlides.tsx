@@ -15,67 +15,117 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { GLASS, V2 } from "../constants/glassPalette";
+import { V2 } from "../constants/glassPalette";
 import { markOnboarded } from "../constants/onboardingState";
 import { typography } from "../constants/typography";
 import { HeroGlassButton } from "./HeroGlassButton";
 import { LiquidGlassChip } from "./LiquidGlassChip";
 
-type SlideId = "game" | "ad" | "level" | "channels" | "wallet";
-type GameId = "blackjack" | "puzzle" | "trivia";
+type SlideId = "game" | "ad" | "estimate" | "level" | "channels" | "wallet";
+type GameId = "puzzle" | "trivia" | "blackjack";
 type ChannelId = "in-app" | "partner" | "surveys";
+
+const ACCENT = "#2F6BFF";
+const ACCENT_SOFT = "#EAF1FF";
+const INK_DARK = "#0E1217";
+const SURFACE = "#FBFBFD";
 
 const SLIDES: { id: SlideId; eyebrow: string; title: string; subtitle: string }[] = [
   {
     id: "game",
     eyebrow: "Step 1",
-    title: "Pick your first earning run",
-    subtitle: "Choose a game. Finish a quick round to unlock one rewarded ad boost.",
+    title: "Choose your first game",
+    subtitle:
+      "Start with a quick round to unlock your first reward boost. Short rounds help you learn how earnings work.",
   },
   {
     id: "ad",
     eyebrow: "Step 2",
-    title: "Watch, estimate, verify",
-    subtitle: "Ads estimate a reward first. Verified rewards move into your wallet.",
+    title: "Watch a rewarded ad",
+    subtitle:
+      "After your round, you can watch one boosted ad. The Vault shows an estimated reward based on the ad value.",
+  },
+  {
+    id: "estimate",
+    eyebrow: "Step 3",
+    title: "See your estimate",
+    subtitle:
+      "When the ad ends, your reward moves into pending while it is reviewed. You can see exactly how the estimate is calculated.",
   },
   {
     id: "level",
-    eyebrow: "Step 3",
-    title: "Raise your share",
-    subtitle: "Your Vault Level decides how much verified ad revenue is shared back with you.",
+    eyebrow: "Step 4",
+    title: "Increase your share",
+    subtitle:
+      "Your Vault Level raises the percentage you keep from verified rewards. Higher levels also unlock a larger daily cap.",
   },
   {
     id: "channels",
-    eyebrow: "Step 4",
-    title: "Earn beyond ads",
-    subtitle: "Partner games and surveys use provider verification, so the app can pay more without weakening the wallet controls.",
+    eyebrow: "Step 5",
+    title: "Earn in more ways",
+    subtitle:
+      "Besides in-app rounds, you can earn from partner offers and surveys. External rewards stay protected until providers verify completion.",
   },
   {
     id: "wallet",
-    eyebrow: "Step 5",
+    eyebrow: "Step 6",
     title: "Cash out confirmed rewards",
-    subtitle: "Available balance is redeemable. Pending and locked funds stay protected until verification clears.",
+    subtitle:
+      "Only verified funds are redeemable. Pending and locked balances stay separate until review is complete.",
   },
 ];
 
 const GAMES = [
-  { id: "blackjack" as const, label: "Blackjack", meta: "Fast round", icon: "cards-playing-outline" as const, color: "#0B1729", dark: true },
-  { id: "puzzle" as const, label: "Puzzle Rush", meta: "Low risk", icon: "puzzle-star" as const, color: "#A9E5FF" },
-  { id: "trivia" as const, label: "Trivia Sprint", meta: "Skill boost", icon: "head-question-outline" as const, color: "#F6D98A" },
+  {
+    id: "puzzle" as const,
+    label: "Puzzle Rush",
+    meta: "Fast and easy",
+    icon: "puzzle" as const,
+  },
+  {
+    id: "trivia" as const,
+    label: "Trivia Sprint",
+    meta: "Answer for bonus",
+    icon: "lightbulb-on-outline" as const,
+  },
+  {
+    id: "blackjack" as const,
+    label: "Blackjack",
+    meta: "Classic quick play",
+    icon: "cards-playing-outline" as const,
+  },
 ];
 
 const TIERS = [
-  { id: "starter", label: "Starter", shareBps: 3000, cap: "$0.50/day", color: "#E5E7EB" },
-  { id: "bronze", label: "Bronze", shareBps: 3500, cap: "$1/day", color: "#FFD7C2" },
-  { id: "silver", label: "Silver", shareBps: 4000, cap: "$2.50/day", color: "#A9E5FF" },
-  { id: "gold", label: "Gold", shareBps: 4500, cap: "$5/day", color: "#F6D98A" },
-  { id: "platinum", label: "Platinum", shareBps: 5000, cap: "$10/day", color: "#DED1FB" },
+  { id: "starter", label: "Starter", shareBps: 3000, cap: "$0.50 daily cap", progress: 0.18 },
+  { id: "bronze", label: "Bronze", shareBps: 3500, cap: "$1 daily cap", progress: 0.36 },
+  { id: "silver", label: "Silver", shareBps: 4000, cap: "$2.50 daily cap", progress: 0.54 },
+  { id: "gold", label: "Gold", shareBps: 4500, cap: "$5 daily cap", progress: 0.78 },
+  { id: "platinum", label: "Platinum", shareBps: 5000, cap: "$10 daily cap", progress: 1 },
 ];
 
 const CHANNELS = [
-  { id: "in-app" as const, title: "In-app games", detail: "Play rounds, unlock ad boosts", icon: "game-controller-outline" as const, color: "#A9E5FF" },
-  { id: "partner" as const, title: "Partner games", detail: "Install and milestone offers", icon: "rocket-outline" as const, color: "#FFD7C2" },
-  { id: "surveys" as const, title: "Surveys", detail: "Higher payouts after callback", icon: "clipboard-outline" as const, color: "#CDEFD8" },
+  {
+    id: "in-app" as const,
+    title: "In-app games",
+    detail: "Play quick rounds and unlock boosts",
+    icon: "game-controller-outline" as const,
+    tint: "#E6EEFF",
+  },
+  {
+    id: "partner" as const,
+    title: "Partner offers",
+    detail: "Install apps and reach milestones",
+    icon: "rocket-outline" as const,
+    tint: "#FFE3D7",
+  },
+  {
+    id: "surveys" as const,
+    title: "Surveys",
+    detail: "Answer questions for higher payouts",
+    icon: "clipboard-outline" as const,
+    tint: "#DDF1E2",
+  },
 ];
 
 export function OnboardingSlides() {
@@ -83,13 +133,13 @@ export function OnboardingSlides() {
   const router = useRouter();
   const listRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [selectedGame, setSelectedGame] = useState<GameId>("blackjack");
+  const [selectedGame, setSelectedGame] = useState<GameId>("puzzle");
   const [adWatched, setAdWatched] = useState(false);
+  const [roundPlayed, setRoundPlayed] = useState(false);
   const [selectedTier, setSelectedTier] = useState("starter");
   const [selectedChannel, setSelectedChannel] = useState<ChannelId>("in-app");
 
   const isLast = activeIndex === SLIDES.length - 1;
-  const activeSlide = SLIDES[activeIndex];
   const selectedTierData = TIERS.find((tier) => tier.id === selectedTier) ?? TIERS[0];
   const rewardPreview = useMemo(
     () => ((0.022 * selectedTierData.shareBps) / 10000).toFixed(4),
@@ -108,13 +158,9 @@ export function OnboardingSlides() {
   }, [router]);
 
   const handlePrimary = useCallback(() => {
-    if (activeSlide.id === "ad" && !adWatched) {
-      setAdWatched(true);
-      return;
-    }
     if (isLast) handleFinish();
     else goToIndex(activeIndex + 1);
-  }, [activeIndex, activeSlide.id, adWatched, goToIndex, handleFinish, isLast]);
+  }, [activeIndex, goToIndex, handleFinish, isLast]);
 
   const renderSlide = useCallback(
     ({ item }: ListRenderItemInfo<(typeof SLIDES)[number]>) => (
@@ -123,17 +169,29 @@ export function OnboardingSlides() {
           slide={item}
           selectedGame={selectedGame}
           onSelectGame={setSelectedGame}
+          roundPlayed={roundPlayed}
+          onPlayRound={() => setRoundPlayed(true)}
           adWatched={adWatched}
           onWatchAd={() => setAdWatched(true)}
           selectedTier={selectedTier}
           onSelectTier={setSelectedTier}
           rewardPreview={rewardPreview}
+          selectedTierData={selectedTierData}
           selectedChannel={selectedChannel}
           onSelectChannel={setSelectedChannel}
         />
       </View>
     ),
-    [adWatched, rewardPreview, selectedChannel, selectedGame, selectedTier, width],
+    [
+      adWatched,
+      rewardPreview,
+      roundPlayed,
+      selectedChannel,
+      selectedGame,
+      selectedTier,
+      selectedTierData,
+      width,
+    ],
   );
 
   return (
@@ -143,7 +201,9 @@ export function OnboardingSlides() {
 
         <View style={styles.topRow}>
           <View style={styles.stepPill}>
-            <Text style={styles.stepPillText}>{activeIndex + 1} / {SLIDES.length}</Text>
+            <Text style={styles.stepPillText}>
+              {activeIndex + 1} / {SLIDES.length}
+            </Text>
           </View>
           <LiquidGlassChip
             systemImage="xmark"
@@ -185,8 +245,10 @@ export function OnboardingSlides() {
               >
                 <MotiView
                   animate={{
-                    width: isActive ? 28 : 8,
-                    opacity: isActive ? 1 : 0.42,
+                    width: isActive ? 8 : 6,
+                    height: isActive ? 8 : 6,
+                    opacity: isActive ? 1 : 0.32,
+                    backgroundColor: isActive ? ACCENT : "#000000",
                   }}
                   transition={{ type: "spring", damping: 18, stiffness: 220 }}
                   style={styles.dot}
@@ -197,14 +259,24 @@ export function OnboardingSlides() {
         </View>
 
         <View style={styles.ctaWrap}>
-          <HeroGlassButton
-            label={isLast ? "Enter The Vault" : activeSlide.id === "ad" && !adWatched ? "Watch ad" : "Continue"}
-            icon={isLast ? undefined : "arrow-forward"}
-            tint="#7DD3FC"
-            tintOpacity={0.62}
-            size="large"
-            onPress={handlePrimary}
-          />
+          {isLast ? (
+            <HeroGlassButton
+              label="Enter The Vault"
+              icon="play"
+              tint={ACCENT}
+              tintOpacity={0.92}
+              size="large"
+              onPress={handlePrimary}
+            />
+          ) : (
+            <Pressable
+              onPress={handlePrimary}
+              style={({ pressed }) => [styles.continuePill, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.continueLabel}>Continue</Text>
+              <Ionicons name="arrow-forward" size={18} color={INK_DARK} />
+            </Pressable>
+          )}
         </View>
       </SafeAreaView>
     </View>
@@ -215,22 +287,28 @@ function SlideContent({
   slide,
   selectedGame,
   onSelectGame,
+  roundPlayed,
+  onPlayRound,
   adWatched,
   onWatchAd,
   selectedTier,
   onSelectTier,
   rewardPreview,
+  selectedTierData,
   selectedChannel,
   onSelectChannel,
 }: {
   slide: (typeof SLIDES)[number];
   selectedGame: GameId;
   onSelectGame: (id: GameId) => void;
+  roundPlayed: boolean;
+  onPlayRound: () => void;
   adWatched: boolean;
   onWatchAd: () => void;
   selectedTier: string;
   onSelectTier: (id: string) => void;
   rewardPreview: string;
+  selectedTierData: (typeof TIERS)[number];
   selectedChannel: ChannelId;
   onSelectChannel: (id: ChannelId) => void;
 }) {
@@ -243,11 +321,23 @@ function SlideContent({
       </View>
 
       {slide.id === "game" ? (
-        <GamePicker selectedGame={selectedGame} onSelectGame={onSelectGame} />
+        <GamePicker
+          selectedGame={selectedGame}
+          onSelectGame={onSelectGame}
+          roundPlayed={roundPlayed}
+          onPlayRound={onPlayRound}
+        />
       ) : slide.id === "ad" ? (
-        <AdSimulation selectedGame={selectedGame} adWatched={adWatched} onWatchAd={onWatchAd} rewardPreview={rewardPreview} />
+        <AdSimulation adWatched={adWatched} onWatchAd={onWatchAd} />
+      ) : slide.id === "estimate" ? (
+        <EstimateReveal rewardPreview={rewardPreview} />
       ) : slide.id === "level" ? (
-        <TierExplorer selectedTier={selectedTier} onSelectTier={onSelectTier} rewardPreview={rewardPreview} />
+        <TierExplorer
+          selectedTier={selectedTier}
+          onSelectTier={onSelectTier}
+          rewardPreview={rewardPreview}
+          selectedTierData={selectedTierData}
+        />
       ) : slide.id === "channels" ? (
         <ChannelPicker selectedChannel={selectedChannel} onSelectChannel={onSelectChannel} />
       ) : (
@@ -257,7 +347,17 @@ function SlideContent({
   );
 }
 
-function GamePicker({ selectedGame, onSelectGame }: { selectedGame: GameId; onSelectGame: (id: GameId) => void }) {
+function GamePicker({
+  selectedGame,
+  onSelectGame,
+  roundPlayed,
+  onPlayRound,
+}: {
+  selectedGame: GameId;
+  onSelectGame: (id: GameId) => void;
+  roundPlayed: boolean;
+  onPlayRound: () => void;
+}) {
   return (
     <View style={styles.phoneFrame}>
       <View style={styles.gameGrid}>
@@ -269,14 +369,13 @@ function GamePicker({ selectedGame, onSelectGame }: { selectedGame: GameId; onSe
               onPress={() => onSelectGame(game.id)}
               style={({ pressed }) => [
                 styles.gameCard,
-                { backgroundColor: game.color },
                 active && styles.gameCardActive,
-                pressed && { opacity: 0.86 },
+                pressed && { opacity: 0.85 },
               ]}
             >
-              <MaterialCommunityIcons name={game.icon} size={28} color={game.dark ? "#FFFFFF" : "#000000"} />
-              <Text style={[styles.gameTitle, game.dark && { color: "#FFFFFF" }]}>{game.label}</Text>
-              <Text style={[styles.gameMeta, game.dark && { color: "rgba(255,255,255,0.7)" }]}>{game.meta}</Text>
+              <MaterialCommunityIcons name={game.icon} size={34} color={INK_DARK} />
+              <Text style={styles.gameTitle}>{game.label}</Text>
+              <Text style={styles.gameMeta}>{game.meta}</Text>
               {active ? (
                 <View style={styles.selectedBadge}>
                   <Ionicons name="checkmark" size={11} color="#FFFFFF" />
@@ -286,50 +385,102 @@ function GamePicker({ selectedGame, onSelectGame }: { selectedGame: GameId; onSe
           );
         })}
       </View>
+
       <View style={styles.unlockStrip}>
-        <Ionicons name="play-circle" size={15} color={V2.cyan} />
-        <Text style={styles.unlockText}>Play a round to unlock an ad boost</Text>
+        <View style={styles.unlockBadge}>
+          <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" />
+        </View>
+        <Text style={styles.unlockText}>
+          Complete 1 short round to unlock 1 boosted ad
+        </Text>
       </View>
+
+      <Pressable
+        onPress={onPlayRound}
+        style={({ pressed }) => [styles.primaryAction, pressed && { opacity: 0.88 }]}
+      >
+        <Ionicons
+          name={roundPlayed ? "checkmark-circle" : "play-circle"}
+          size={22}
+          color="#FFFFFF"
+        />
+        <Text style={styles.primaryActionText}>
+          {roundPlayed ? "Round complete" : "Play first round"}
+        </Text>
+      </Pressable>
     </View>
   );
 }
 
 function AdSimulation({
-  selectedGame,
   adWatched,
   onWatchAd,
-  rewardPreview,
 }: {
-  selectedGame: GameId;
   adWatched: boolean;
   onWatchAd: () => void;
-  rewardPreview: string;
 }) {
-  const game = GAMES.find((item) => item.id === selectedGame) ?? GAMES[0];
   return (
     <View style={styles.phoneFrame}>
       <View style={styles.adHero}>
         <View style={styles.adPlay}>
-          <Ionicons name={adWatched ? "checkmark" : "play"} size={28} color="#FFFFFF" />
+          <Ionicons name={adWatched ? "checkmark" : "play"} size={26} color="#FFFFFF" />
         </View>
-        <Text style={styles.adTitle}>{adWatched ? "Ad complete" : `${game.label} boost ready`}</Text>
-        <Text style={styles.adStatus}>{adWatched ? "Reward is pending verification" : "Tap to simulate a rewarded ad"}</Text>
+        <Text style={styles.adTitle}>{adWatched ? "Ad watched" : "Boost ready"}</Text>
+        <Text style={styles.adStatus}>
+          {adWatched ? "Reward is pending verification" : "Tap to simulate a rewarded ad"}
+        </Text>
       </View>
-      <Pressable onPress={onWatchAd} style={styles.adButton}>
-        <Ionicons name="videocam-outline" size={14} color="#FFFFFF" />
+
+      <Pressable
+        onPress={onWatchAd}
+        style={({ pressed }) => [styles.adButton, pressed && { opacity: 0.86 }]}
+      >
+        <Ionicons name="videocam-outline" size={16} color="#FFFFFF" />
         <Text style={styles.adButtonText}>{adWatched ? "Watched" : "Watch rewarded ad"}</Text>
       </Pressable>
-      {adWatched ? (
-        <View style={styles.mathPanel}>
-          <MathRow label="Estimated ad revenue" value="$0.0220" />
-          <MathRow label="Your Starter share" value="30%" />
-          <MathRow label="Pending reward" value={`$${rewardPreview}`} strong />
+
+      <View style={styles.softHint}>
+        <View style={styles.softHintIcon}>
+          <Ionicons name="information" size={13} color="#FFFFFF" />
         </View>
-      ) : (
-        <View style={styles.simpleHint}>
-          <Text style={styles.simpleHintText}>After the ad, The Vault shows the exact math before it becomes redeemable.</Text>
+        <Text style={styles.softHintText}>
+          Reward amounts are estimated first, then verified before cash out.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function EstimateReveal({ rewardPreview }: { rewardPreview: string }) {
+  return (
+    <View style={styles.phoneFrame}>
+      <View style={styles.adHero}>
+        <View style={styles.adCheck}>
+          <Ionicons name="checkmark" size={22} color="#FFFFFF" />
         </View>
-      )}
+        <Text style={styles.adTitle}>Ad watched</Text>
+        <Text style={styles.adStatus}>Reward is pending verification</Text>
+      </View>
+
+      <View style={styles.watchedPill}>
+        <Ionicons name="videocam-outline" size={16} color="#FFFFFF" />
+        <Text style={styles.adButtonText}>Watched</Text>
+      </View>
+
+      <View style={styles.mathPanel}>
+        <MathRow label="Estimated ad revenue" value="$0.0220" />
+        <View style={styles.mathDivider} />
+        <MathRow label="Your Starter share" value="30%" />
+        <View style={styles.mathDivider} />
+        <MathRow label="Pending reward" value={`$${rewardPreview}`} accent />
+      </View>
+
+      <View style={styles.softHintMuted}>
+        <Ionicons name="information-circle-outline" size={16} color={V2.muted} />
+        <Text style={styles.softHintTextMuted}>
+          Pending rewards become available after review.
+        </Text>
+      </View>
     </View>
   );
 }
@@ -338,22 +489,30 @@ function TierExplorer({
   selectedTier,
   onSelectTier,
   rewardPreview,
+  selectedTierData,
 }: {
   selectedTier: string;
   onSelectTier: (id: string) => void;
   rewardPreview: string;
+  selectedTierData: (typeof TIERS)[number];
 }) {
-  const current = TIERS.find((tier) => tier.id === selectedTier) ?? TIERS[0];
   return (
     <View style={styles.phoneFrame}>
-      <View style={[styles.tierHero, { backgroundColor: current.color }]}>
+      <View style={styles.tierHero}>
         <Text style={styles.tierHeroLabel}>Vault Level</Text>
-        <Text style={styles.tierHeroTitle}>{current.label}</Text>
-        <Text style={styles.tierHeroSub}>{formatSharePercent(current.shareBps)} share · {current.cap}</Text>
+        <Text style={styles.tierHeroTitle}>{selectedTierData.label}</Text>
+        <Text style={styles.tierHeroSub}>
+          {formatSharePercent(selectedTierData.shareBps)} share · {selectedTierData.cap}
+        </Text>
         <View style={styles.tierTrack}>
-          <View style={[styles.tierFill, { width: selectedTier === "starter" ? "0%" : selectedTier === "platinum" ? "100%" : "68%" }]} />
+          <MotiView
+            animate={{ width: `${selectedTierData.progress * 100}%` }}
+            transition={{ type: "spring", damping: 20, stiffness: 180 }}
+            style={styles.tierFill}
+          />
         </View>
       </View>
+
       <View style={styles.tierChips}>
         {TIERS.map((tier) => {
           const active = selectedTier === tier.id;
@@ -363,14 +522,23 @@ function TierExplorer({
               onPress={() => onSelectTier(tier.id)}
               style={[styles.tierChip, active && styles.tierChipActive]}
             >
-              <Text style={[styles.tierChipText, active && styles.tierChipTextActive]}>{tier.label}</Text>
+              <Text style={[styles.tierChipText, active && styles.tierChipTextActive]}>
+                {tier.label}
+              </Text>
             </Pressable>
           );
         })}
       </View>
+
       <View style={styles.mathPanel}>
-        <MathRow label="$0.022 ad at this tier" value={`$${rewardPreview}`} strong />
-        <MathRow label="Higher tiers unlock" value="More cap + faster review" />
+        <MathRow label="Current reward at this level" value={`$${rewardPreview}`} accent />
+        <View style={styles.mathDivider} />
+        <MathRow label="Higher tiers unlock" value="More share + faster review" small />
+      </View>
+
+      <View style={styles.softHintMuted}>
+        <Ionicons name="information-circle-outline" size={16} color={ACCENT} />
+        <Text style={styles.softHintTextMuted}>Level up by staying active and verified.</Text>
       </View>
     </View>
   );
@@ -393,20 +561,31 @@ function ChannelPicker({
             onPress={() => onSelectChannel(channel.id)}
             style={[styles.channelRow, active && styles.channelRowActive]}
           >
-            <View style={[styles.channelIcon, { backgroundColor: channel.color }]}>
-              <Ionicons name={channel.icon} size={18} color="#000000" />
+            <View style={[styles.channelIcon, { backgroundColor: channel.tint }]}>
+              <Ionicons name={channel.icon} size={20} color={INK_DARK} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.channelTitle}>{channel.title}</Text>
               <Text style={styles.channelDetail}>{channel.detail}</Text>
             </View>
-            <Ionicons name={active ? "checkmark-circle" : "chevron-forward"} size={18} color={active ? V2.cyan : V2.faint} />
+            {active ? (
+              <View style={styles.channelCheck}>
+                <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+              </View>
+            ) : (
+              <Ionicons name="chevron-forward" size={18} color={V2.faint} />
+            )}
           </Pressable>
         );
       })}
-      <View style={styles.unlockStrip}>
-        <Ionicons name="receipt-outline" size={15} color={V2.cyan} />
-        <Text style={styles.unlockText}>External rewards verify through partner callbacks</Text>
+
+      <View style={styles.softHint}>
+        <View style={styles.softHintIcon}>
+          <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" />
+        </View>
+        <Text style={styles.softHintText}>
+          Partner rewards are confirmed before funds are released.
+        </Text>
       </View>
     </View>
   );
@@ -420,32 +599,66 @@ function WalletPreview() {
         <Text style={styles.walletValue}>$0.00</Text>
         <Text style={styles.walletSub}>Confirmed funds only</Text>
       </View>
+
       <View style={styles.walletGrid}>
-        <WalletTile label="Pending" value="$0.00" color="#A9E5FF" />
-        <WalletTile label="Locked" value="$0.00" color="#F6D98A" />
-        <WalletTile label="Generated" value="$0.00" color="#FFFFFF" />
-        <WalletTile label="Earned" value="$0.00" color="#FFFFFF" />
+        <WalletTile label="Pending" value="$0.00" tone="cyan" />
+        <WalletTile label="Locked" value="$0.00" tone="amber" />
+        <WalletTile label="Generated" value="$0.00" tone="plain" />
+        <WalletTile label="Earned" value="$0.00" tone="plain" />
       </View>
-      <View style={styles.cashoutRule}>
+
+      <View style={styles.flowStrip}>
         <Ionicons name="lock-closed-outline" size={14} color={V2.muted} />
-        <Text style={styles.cashoutRuleText}>Estimated to pending to verified to available to redeemable</Text>
+        <Text style={styles.flowStepText}>Estimate</Text>
+        <Ionicons name="arrow-forward" size={11} color={V2.faint} />
+        <Text style={styles.flowStepText}>Pending</Text>
+        <Ionicons name="arrow-forward" size={11} color={V2.faint} />
+        <Text style={styles.flowStepText}>Verified</Text>
+        <Ionicons name="arrow-forward" size={11} color={V2.faint} />
+        <Text style={styles.flowStepText}>Available</Text>
       </View>
     </View>
   );
 }
 
-function MathRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function MathRow({
+  label,
+  value,
+  accent,
+  small,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  small?: boolean;
+}) {
   return (
     <View style={styles.mathRow}>
       <Text style={styles.mathLabel}>{label}</Text>
-      <Text style={[styles.mathValue, strong && { color: V2.cyan }]}>{value}</Text>
+      <Text style={[styles.mathValue, small && { fontSize: 12 }, accent && { color: ACCENT }]}>
+        {value}
+      </Text>
     </View>
   );
 }
 
-function WalletTile({ label, value, color }: { label: string; value: string; color: string }) {
+function WalletTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "cyan" | "amber" | "plain";
+}) {
+  const tileStyle =
+    tone === "cyan"
+      ? styles.walletTileCyan
+      : tone === "amber"
+      ? styles.walletTileAmber
+      : styles.walletTilePlain;
   return (
-    <View style={[styles.walletTile, { backgroundColor: color }]}>
+    <View style={[styles.walletTile, tileStyle]}>
       <Text style={styles.walletTileValue}>{value}</Text>
       <Text style={styles.walletTileLabel}>{label}</Text>
     </View>
@@ -455,7 +668,7 @@ function WalletTile({ label, value, color }: { label: string; value: string; col
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: V2.bg,
+    backgroundColor: SURFACE,
   },
   topRow: {
     flexDirection: "row",
@@ -466,63 +679,69 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   stepPill: {
-    minHeight: 36,
-    borderRadius: 18,
+    minHeight: 34,
+    borderRadius: 17,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
-    paddingHorizontal: 13,
+    borderColor: "rgba(0,0,0,0.08)",
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   stepPillText: {
-    ...typography.bold,
-    fontSize: 12,
-    color: "#000000",
+    ...typography.semibold,
+    fontSize: 13,
+    color: INK_DARK,
   },
   slidesContainer: {
     flex: 1,
   },
   slide: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingHorizontal: 22,
+    paddingTop: 6,
   },
   textBlock: {
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 18,
   },
   eyebrow: {
     ...typography.bold,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: V2.cyan,
+    fontSize: 11,
+    letterSpacing: 1.6,
+    color: ACCENT,
     textTransform: "uppercase",
   },
   headline: {
     ...typography.bold,
-    marginTop: 6,
+    marginTop: 8,
     fontSize: 30,
     lineHeight: 35,
-    color: "#000000",
+    letterSpacing: -0.6,
+    color: INK_DARK,
   },
   subtext: {
-    ...typography.medium,
-    marginTop: 10,
-    fontSize: 14,
-    lineHeight: 20,
-    color: GLASS.inkSoft,
+    ...typography.regular,
+    marginTop: 12,
+    fontSize: 15,
+    lineHeight: 21,
+    color: "#5C6068",
   },
   phoneFrame: {
     flex: 1,
-    minHeight: 330,
-    borderRadius: 30,
+    minHeight: 320,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.12)",
+    borderColor: "rgba(0,0,0,0.06)",
     backgroundColor: "#FFFFFF",
     padding: 16,
-    shadowColor: GLASS.charcoal,
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
+    shadowColor: "#0A1628",
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
   },
   gameGrid: {
@@ -534,160 +753,246 @@ const styles = StyleSheet.create({
     minHeight: 138,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
-    padding: 12,
+    borderColor: "rgba(0,0,0,0.08)",
+    backgroundColor: "#F4F5F8",
+    padding: 14,
+    alignItems: "flex-start",
     justifyContent: "flex-end",
   },
   gameCardActive: {
-    borderWidth: 3,
-    borderColor: "#000000",
+    borderWidth: 2,
+    borderColor: ACCENT,
+    backgroundColor: ACCENT_SOFT,
   },
   gameTitle: {
     ...typography.bold,
-    marginTop: 12,
+    marginTop: 14,
     fontSize: 13,
-    color: "#000000",
+    color: INK_DARK,
   },
   gameMeta: {
-    ...typography.semibold,
-    marginTop: 2,
-    fontSize: 10,
-    color: V2.muted,
+    ...typography.medium,
+    marginTop: 3,
+    fontSize: 11,
+    color: "#7B7F87",
   },
   selectedBadge: {
     position: "absolute",
-    top: 8,
-    right: 8,
+    top: 10,
+    right: 10,
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#000000",
+    backgroundColor: ACCENT,
     alignItems: "center",
     justifyContent: "center",
   },
   unlockStrip: {
     marginTop: 14,
-    borderRadius: 18,
-    backgroundColor: "#F7FCFF",
+    borderRadius: 14,
+    backgroundColor: ACCENT_SOFT,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
-    padding: 12,
+    borderColor: "rgba(47,107,255,0.18)",
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 10,
+  },
+  unlockBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
   },
   unlockText: {
-    ...typography.semibold,
+    ...typography.medium,
     flex: 1,
-    fontSize: 12,
-    color: V2.muted,
+    fontSize: 13,
+    color: INK_DARK,
+  },
+  primaryAction: {
+    marginTop: 14,
+    minHeight: 52,
+    borderRadius: 26,
+    backgroundColor: ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+    shadowColor: ACCENT,
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  primaryActionText: {
+    ...typography.bold,
+    fontSize: 15,
+    color: "#FFFFFF",
   },
   adHero: {
-    flex: 1,
-    minHeight: 150,
-    borderRadius: 24,
-    backgroundColor: "#1A1A1F",
+    minHeight: 170,
+    borderRadius: 22,
+    backgroundColor: "#1B1E25",
     alignItems: "center",
     justifyContent: "center",
-    padding: 18,
+    padding: 22,
   },
   adPlay: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: V2.cyan,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: ACCENT,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: 14,
+    shadowColor: ACCENT,
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  adCheck: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
   },
   adTitle: {
     ...typography.bold,
-    fontSize: 20,
+    fontSize: 19,
     color: "#FFFFFF",
     textAlign: "center",
   },
   adStatus: {
-    ...typography.semibold,
-    marginTop: 5,
-    fontSize: 12,
-    color: "rgba(255,255,255,0.68)",
+    ...typography.medium,
+    marginTop: 4,
+    fontSize: 13,
+    color: "rgba(255,255,255,0.62)",
     textAlign: "center",
   },
   adButton: {
-    marginTop: 12,
-    minHeight: 44,
-    borderRadius: 22,
-    backgroundColor: "#000000",
+    marginTop: 14,
+    minHeight: 50,
+    borderRadius: 25,
+    backgroundColor: "#0E1217",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 7,
+    gap: 8,
+  },
+  watchedPill: {
+    marginTop: 14,
+    minHeight: 50,
+    borderRadius: 25,
+    backgroundColor: "#0E1217",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
   },
   adButtonText: {
     ...typography.bold,
-    fontSize: 13,
+    fontSize: 14,
     color: "#FFFFFF",
   },
-  simpleHint: {
+  softHint: {
     marginTop: 12,
-    borderRadius: 18,
-    backgroundColor: "#F7FCFF",
+    borderRadius: 14,
+    backgroundColor: ACCENT_SOFT,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
-    padding: 12,
+    borderColor: "rgba(47,107,255,0.18)",
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  simpleHintText: {
-    ...typography.semibold,
+  softHintIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  softHintText: {
+    ...typography.medium,
+    flex: 1,
     fontSize: 12,
-    lineHeight: 17,
+    lineHeight: 16,
+    color: INK_DARK,
+  },
+  softHintMuted: {
+    marginTop: 10,
+    paddingHorizontal: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  softHintTextMuted: {
+    ...typography.medium,
+    flex: 1,
+    fontSize: 12,
     color: V2.muted,
   },
   mathPanel: {
     marginTop: 12,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
-    backgroundColor: "#FFFFFF",
-    padding: 12,
+    borderColor: "rgba(0,0,0,0.07)",
+    backgroundColor: "#FAFBFD",
+    padding: 14,
+  },
+  mathDivider: {
+    height: 1,
+    backgroundColor: "rgba(0,0,0,0.06)",
+    marginVertical: 2,
   },
   mathRow: {
-    minHeight: 30,
+    minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   mathLabel: {
-    ...typography.semibold,
-    fontSize: 12,
+    ...typography.medium,
+    fontSize: 13,
     color: V2.muted,
   },
   mathValue: {
     ...typography.bold,
-    fontSize: 13,
-    color: "#000000",
+    fontSize: 14,
+    color: INK_DARK,
   },
   tierHero: {
-    borderRadius: 24,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
-    padding: 16,
+    borderColor: "rgba(0,0,0,0.07)",
+    backgroundColor: "#F2F5FB",
+    padding: 18,
   },
   tierHeroLabel: {
     ...typography.bold,
     fontSize: 10,
     color: V2.muted,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.4,
   },
   tierHeroTitle: {
     ...typography.bold,
     marginTop: 4,
-    fontSize: 28,
-    color: "#000000",
+    fontSize: 30,
+    letterSpacing: -0.6,
+    color: INK_DARK,
   },
   tierHeroSub: {
-    ...typography.semibold,
-    marginTop: 4,
+    ...typography.medium,
+    marginTop: 6,
     fontSize: 13,
     color: V2.muted,
   },
@@ -695,45 +1000,46 @@ const styles = StyleSheet.create({
     marginTop: 14,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "rgba(0,0,0,0.12)",
+    backgroundColor: "rgba(14,18,23,0.08)",
     overflow: "hidden",
   },
   tierFill: {
     height: "100%",
-    backgroundColor: "#000000",
+    backgroundColor: ACCENT,
+    borderRadius: 4,
   },
   tierChips: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 6,
   },
   tierChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.12)",
+    borderColor: "rgba(0,0,0,0.08)",
     backgroundColor: "#FFFFFF",
     paddingVertical: 8,
-    paddingHorizontal: 11,
+    paddingHorizontal: 12,
   },
   tierChipActive: {
-    backgroundColor: "#000000",
-    borderColor: "#000000",
+    backgroundColor: INK_DARK,
+    borderColor: INK_DARK,
   },
   tierChipText: {
-    ...typography.bold,
-    fontSize: 11,
+    ...typography.semibold,
+    fontSize: 12,
     color: V2.muted,
   },
   tierChipTextActive: {
     color: "#FFFFFF",
   },
   channelRow: {
-    minHeight: 74,
-    borderRadius: 20,
+    minHeight: 72,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
-    backgroundColor: "#FFFFFF",
+    borderColor: "rgba(0,0,0,0.06)",
+    backgroundColor: "#FAFBFD",
     padding: 12,
     marginBottom: 10,
     flexDirection: "row",
@@ -741,51 +1047,61 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   channelRowActive: {
-    borderWidth: 2,
-    borderColor: V2.cyan,
+    borderWidth: 1.5,
+    borderColor: ACCENT,
+    backgroundColor: ACCENT_SOFT,
   },
   channelIcon: {
     width: 44,
     height: 44,
-    borderRadius: 15,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   channelTitle: {
     ...typography.bold,
     fontSize: 15,
-    color: "#000000",
+    color: INK_DARK,
   },
   channelDetail: {
-    ...typography.semibold,
+    ...typography.medium,
     marginTop: 2,
-    fontSize: 11,
+    fontSize: 12,
     color: V2.muted,
   },
+  channelCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: ACCENT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   walletCard: {
-    borderRadius: 24,
-    backgroundColor: "#1A1A1F",
+    borderRadius: 22,
+    backgroundColor: "#1B1E25",
     padding: 18,
   },
   walletLabel: {
     ...typography.bold,
     fontSize: 10,
-    letterSpacing: 1,
+    letterSpacing: 1.4,
     color: "rgba(255,255,255,0.6)",
     textTransform: "uppercase",
   },
   walletValue: {
     ...typography.bold,
-    marginTop: 8,
-    fontSize: 46,
-    lineHeight: 50,
+    marginTop: 10,
+    fontSize: 44,
+    lineHeight: 48,
+    letterSpacing: -1,
     color: "#FFFFFF",
   },
   walletSub: {
-    ...typography.semibold,
+    ...typography.medium,
     marginTop: 4,
-    fontSize: 12,
-    color: "rgba(255,255,255,0.68)",
+    fontSize: 13,
+    color: "rgba(255,255,255,0.62)",
   },
   walletGrid: {
     marginTop: 12,
@@ -794,60 +1110,89 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   walletTile: {
-    width: "48%",
-    borderRadius: 16,
+    width: "48.5%",
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
-    padding: 11,
+    borderColor: "rgba(0,0,0,0.06)",
+    padding: 12,
+  },
+  walletTileCyan: {
+    backgroundColor: "#E3EEFF",
+  },
+  walletTileAmber: {
+    backgroundColor: "#FCE5BD",
+  },
+  walletTilePlain: {
+    backgroundColor: "#F4F5F8",
   },
   walletTileValue: {
     ...typography.bold,
-    fontSize: 17,
-    color: "#000000",
+    fontSize: 18,
+    color: INK_DARK,
   },
   walletTileLabel: {
-    ...typography.semibold,
+    ...typography.medium,
     marginTop: 2,
-    fontSize: 10,
+    fontSize: 11,
     color: V2.muted,
   },
-  cashoutRule: {
+  flowStrip: {
     marginTop: 12,
-    borderRadius: 16,
-    backgroundColor: "#F5F5F7",
-    padding: 11,
+    borderRadius: 14,
+    backgroundColor: "#F4F5F8",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
-  cashoutRuleText: {
-    ...typography.bold,
-    flex: 1,
+  flowStepText: {
+    ...typography.semibold,
     fontSize: 11,
-    lineHeight: 15,
     color: V2.muted,
   },
   dotsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingTop: 8,
-    paddingBottom: 16,
+    gap: 10,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
   dotHitArea: {
-    minWidth: 30,
-    minHeight: 28,
+    minWidth: 22,
+    minHeight: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   dot: {
-    height: 8,
     borderRadius: 4,
-    backgroundColor: "#000000",
   },
   ctaWrap: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 22,
     paddingBottom: 12,
+  },
+  continuePill: {
+    minHeight: 56,
+    borderRadius: 28,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
+    paddingHorizontal: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#0A1628",
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  continueLabel: {
+    ...typography.bold,
+    fontSize: 16,
+    color: INK_DARK,
+    flex: 1,
+    textAlign: "center",
+    marginLeft: 18,
   },
 });

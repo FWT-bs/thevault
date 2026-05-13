@@ -1,14 +1,17 @@
+import { isDevMegaActive } from "../auth/devMega";
 import { supabase } from "../supabase/client";
 
 let signInPromise: Promise<string | null> | null = null;
 
 async function readCurrentToken(): Promise<string | null> {
+  if (isDevMegaActive()) return null;
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }
 
 export async function getAccountAccessToken(): Promise<string | null> {
+  if (isDevMegaActive()) return null;
   const existing = await readCurrentToken();
   if (existing) return existing;
   if (!supabase) return null;

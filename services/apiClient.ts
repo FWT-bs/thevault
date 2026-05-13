@@ -1,4 +1,5 @@
 import { getAccountAccessToken } from "./features/account";
+import { DEV_MEGA_API_USER_ID, isDevMegaActive } from "./auth/devMega";
 
 const DEFAULT_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://localhost:3000/api";
 
@@ -27,9 +28,18 @@ export async function apiRequest<T>(
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   } else {
-    headers.set("x-user-id", init?.userId ?? "00000000-0000-0000-0000-000000000001");
+    headers.set(
+      "x-user-id",
+      init?.userId ??
+        (isDevMegaActive() ? DEV_MEGA_API_USER_ID : "00000000-0000-0000-0000-000000000001"),
+    );
   }
   if (init?.idempotencyKey) headers.set("x-idempotency-key", init.idempotencyKey);
+
+  if (isDevMegaActive() && path === "/wallet/balance") {
+    const stub = mockApiResponse<T>(path, init);
+    if (stub) return stub;
+  }
 
   let res: Response;
   try {
@@ -61,21 +71,22 @@ function mockApiResponse<T>(path: string, init?: RequestInit): T | null {
   const method = init?.method?.toUpperCase() ?? "GET";
 
   if (path === "/wallet/balance") {
+    const mega = isDevMegaActive();
     return {
       wallet: {
-        userId: "00000000-0000-0000-0000-000000000001",
-        credits: 0,
-        usdBalance: 0,
-        availableCredits: 0,
-        availableUsd: 0,
+        userId: DEV_MEGA_API_USER_ID,
+        credits: mega ? 999_999_999 : 0,
+        usdBalance: mega ? 9_999_999 : 0,
+        availableCredits: mega ? 999_999_999 : 0,
+        availableUsd: mega ? 9_999_999 : 0,
         pendingCredits: 0,
         pendingUsd: 0,
         lockedCredits: 0,
         lockedUsd: 0,
-        lifetimeGeneratedUsd: 0,
-        lifetimeEarnedUsd: 0,
-        currentTier: "starter",
-        currentShareBps: 3000,
+        lifetimeGeneratedUsd: mega ? 9_999_999 : 0,
+        lifetimeEarnedUsd: mega ? 9_999_999 : 0,
+        currentTier: mega ? "diamond" : "starter",
+        currentShareBps: mega ? 5000 : 3000,
         fxRateCrPerUsd: 100,
         updatedAt: now,
       },

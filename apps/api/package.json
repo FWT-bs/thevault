@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "tsx watch api/dev.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "supabase:db:reset": "supabase db reset --workdir ../../infra/supabase",
-    "supabase:types": "supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > ../../packages/contracts/src/generated/supabase.ts",
+    "supabase:db:reset": "npx -y supabase db reset --workdir ../../infra/supabase",
+    "supabase:types": "npx -y supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > ../../packages/contracts/src/generated/supabase.ts",
     "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {

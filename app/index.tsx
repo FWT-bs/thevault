@@ -3,9 +3,9 @@ import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AnimatePresence, MotiText, MotiView } from "moti";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
+  ActivityIndicator,
   Image,
   Modal,
   Platform,
@@ -26,8 +26,19 @@ import { GlassSurface } from "../components/GlassSurface";
 import { HeroGlassButton } from "../components/HeroGlassButton";
 import { LiquidGlassCard } from "../components/LiquidGlassCard";
 import { GLASS, V2 } from "../constants/glassPalette";
-import { hasOnboarded } from "../constants/onboardingState";
 import { typography } from "../constants/typography";
+import { isSupabaseClientConfigured } from "../services/supabase/client";
+import {
+  completeGoogleSignIn,
+  isAppleSignInAvailable,
+  isGoogleConfigured,
+  sendEmailOtp,
+  sendPhoneOtp,
+  signInWithApple,
+  useGoogleAuth,
+} from "../services/auth/providers";
+import { isDevMegaPhone } from "../services/auth/devMega";
+import { useSession } from "../services/auth/SessionProvider";
 
 const COUNTRY_CODES = [
   { label: "United States", code: "+1", flag: "🇺🇸" },
@@ -90,16 +101,113 @@ export default function Page() {
   const [selectedCountry, setSelectedCountry] = useState<CountryCodeOption>(COUNTRY_CODES[0]);
   const [isCountryModalVisible, setIsCountryModalVisible] = useState(false);
   const [isSignUpMode, setIsSignUpMode] = useState(false);
+  const [pendingProvider, setPendingProvider] = useState<
+    "phone" | "email" | "google" | "apple" | null
+  >(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [emailModalVisible, setEmailModalVisible] = useState(false);
+  const [emailDraft, setEmailDraft] = useState("");
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const inputRef = useRef<import("react-native").TextInput>(null);
   const { height: windowHeight } = useWindowDimensions();
   const router = useRouter();
+  const { activateDevMega } = useSession();
   const sheetHeight = Math.round(windowHeight * 0.62);
 
+  const google = useGoogleAuth();
+
+  useEffect(() => {
+    isAppleSignInAvailable().then(setAppleAvailable);
+  }, []);
+
+  // Exchange a Google id_token for a Supabase session as soon as the prompt
+  // returns one.
+  useEffect(() => {
+    if (google.response?.type !== "success") return;
+    const idToken = google.response.params?.id_token;
+    (async () => {
+      setPendingProvider("google");
+      setErrorMessage(null);
+      const result = await completeGoogleSignIn(idToken);
+      if (!result.ok) setErrorMessage(result.message);
+      setPendingProvider(null);
+    })();
+  }, [google.response]);
+
   const phoneDigits = phone.replace(/\D/g, "");
-  const canContinue = phoneDigits.length >= 9;
+  const fullPhonePreview = `${selectedCountry.code}${phoneDigits}`;
+  const devMegaPhone =
+    typeof __DEV__ !== "undefined" && __DEV__ && isDevMegaPhone(fullPhonePreview);
+  const canContinue =
+    phoneDigits.length >= 9 &&
+    pendingProvider === null &&
+    (isSupabaseClientConfigured || devMegaPhone);
 
   const heightScale = Math.min(Math.max(windowHeight / 844, 0.72), 1.15);
   const sp = (n: number) => Math.round(n * heightScale);
+
+  const handlePhoneContinue = async () => {
+    if (!canContinue) return;
+    const fullPhone = `${selectedCountry.code}${phoneDigits}`;
+    setPendingProvider("phone");
+    setErrorMessage(null);
+    if (typeof __DEV__ !== "undefined" && __DEV__ && isDevMegaPhone(fullPhone)) {
+      await activateDevMega();
+      router.replace("/home-tab");
+      setPendingProvider(null);
+      return;
+    }
+    const result = await sendPhoneOtp(fullPhone);
+    setPendingProvider(null);
+    if (!result.ok) {
+      setErrorMessage(result.message);
+      return;
+    }
+    router.push({
+      pathname: "/verify",
+      params: { channel: "sms", target: fullPhone },
+    });
+  };
+
+  const handleEmailSubmit = async () => {
+    const email = emailDraft.trim();
+    if (!email) return;
+    setPendingProvider("email");
+    setErrorMessage(null);
+    const result = await sendEmailOtp(email);
+    setPendingProvider(null);
+    if (!result.ok) {
+      setErrorMessage(result.message);
+      return;
+    }
+    setEmailModalVisible(false);
+    router.push({
+      pathname: "/verify",
+      params: { channel: "email", target: email },
+    });
+  };
+
+  const handleAppleSignIn = async () => {
+    setPendingProvider("apple");
+    setErrorMessage(null);
+    const result = await signInWithApple();
+    setPendingProvider(null);
+    if (!result.ok && result.code !== "ERR_CANCELED" && result.code !== "ERR_REQUEST_CANCELED") {
+      setErrorMessage(result.message);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (!google.ready) {
+      setErrorMessage("Google sign-in is disabled in this build.");
+      return;
+    }
+    setPendingProvider("google");
+    setErrorMessage(null);
+    await google.promptAsync();
+    // completeGoogleSignIn runs in the useEffect that watches google.response,
+    // which will reset pendingProvider when it finishes.
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFFFF" }}>
@@ -153,7 +261,6 @@ export default function Page() {
             transition={{ type: "timing", duration: 560, delay: 80 }}
             style={{ marginBottom: sp(12) }}
           >
-            {/* Floating label */}
             <MotiText
               animate={{
                 translateY: isFocused || phone.length > 0 ? 0 : 20,
@@ -175,6 +282,7 @@ export default function Page() {
             <View style={{ flexDirection: "row", gap: 10 }}>
               <Pressable
                 onPress={() => setIsCountryModalVisible(true)}
+                accessibilityLabel="Select country code"
                 style={{ minWidth: 88 }}
               >
                 <LiquidGlassCard
@@ -186,10 +294,25 @@ export default function Page() {
                     borderColor: isFocused ? "rgba(0,122,255,0.35)" : "transparent",
                   }}
                 >
-                  {/* height: 54 matches card so alignItems:"center" actually centers */}
-                  <View style={{ height: 54, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 14, gap: 8 }}>
+                  <View
+                    style={{
+                      height: 54,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 14,
+                      gap: 8,
+                    }}
+                  >
                     <Text style={{ fontSize: 18 }}>{selectedCountry.flag}</Text>
-                    <Text style={{ ...typography.bold, fontSize: 14, color: "#000000", letterSpacing: -0.2 }}>
+                    <Text
+                      style={{
+                        ...typography.bold,
+                        fontSize: 14,
+                        color: "#000000",
+                        letterSpacing: -0.2,
+                      }}
+                    >
                       {selectedCountry.code}
                     </Text>
                     <MotiView
@@ -212,7 +335,6 @@ export default function Page() {
                     borderColor: isFocused ? "rgba(0,122,255,0.45)" : "transparent",
                   }}
                 >
-                  {/* height: 54 matches card so justifyContent:"center" actually centers */}
                   <View style={{ height: 54, justifyContent: "center", paddingHorizontal: 18 }}>
                     <TextInput
                       ref={inputRef}
@@ -248,11 +370,11 @@ export default function Page() {
                 color: "#000000",
               }}
             >
-              Calls from The Vault are free; carrier rates may still apply.
+              We'll text a six-digit code. Carrier rates may still apply.
             </Text>
           </MotiView>
 
-          {/* Continue CTA — Liquid Glass (see THE_VAULT_UI_GUIDE.md) */}
+          {/* Continue CTA */}
           <MotiView
             from={{ opacity: 0, translateY: 14 }}
             animate={{ opacity: 1, translateY: 0 }}
@@ -260,17 +382,32 @@ export default function Page() {
             style={{ marginBottom: sp(14) }}
           >
             <HeroGlassButton
-              label="Continue"
+              label={pendingProvider === "phone" ? "Sending code…" : "Continue"}
               icon="arrow-forward"
               tint={canContinue ? V2.blueDeep : "#E5E7EB"}
               tintOpacity={canContinue ? 0.9 : 0.62}
               size="large"
               disabled={!canContinue}
-              onPress={() => {
-                router.push(hasOnboarded() ? "/home-tab" : "/onboarding");
-              }}
+              onPress={handlePhoneContinue}
             />
           </MotiView>
+
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color="#B91C1C" />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          {!isSupabaseClientConfigured ? (
+            <View style={styles.warningBox}>
+              <Ionicons name="information-circle" size={16} color={V2.amberInk} />
+              <Text style={styles.warningText}>
+                Supabase env keys are missing — auth is disabled. Add
+                EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY to .env.local.
+              </Text>
+            </View>
+          ) : null}
 
           <OrDivider style={{ marginTop: sp(2), marginBottom: sp(2) }} />
 
@@ -283,26 +420,56 @@ export default function Page() {
             transition={{ type: "timing", duration: 620, delay: 200 }}
             style={{ gap: 12 }}
           >
+            {appleAvailable ? (
+              <LiquidGlassSocialButton
+                label={
+                  pendingProvider === "apple"
+                    ? "Signing in…"
+                    : isSignUpMode
+                      ? "Sign up with Apple"
+                      : "Continue with Apple"
+                }
+                variant="apple"
+                icon={<Ionicons name="logo-apple" size={20} color="#FFFFFF" />}
+                disabled={pendingProvider !== null}
+                onPress={handleAppleSignIn}
+                pending={pendingProvider === "apple"}
+              />
+            ) : null}
             <LiquidGlassSocialButton
-              label={isSignUpMode ? "Sign up with Apple" : "Continue with Apple"}
-              variant="apple"
-              icon={<Ionicons name="logo-apple" size={20} color="#FFFFFF" />}
-            />
-            <LiquidGlassSocialButton
-              label={isSignUpMode ? "Sign up with Google" : "Continue with Google"}
+              label={
+                pendingProvider === "google"
+                  ? "Signing in…"
+                  : !isGoogleConfigured
+                    ? "Google (add OAuth IDs)"
+                    : isSignUpMode
+                      ? "Sign up with Google"
+                      : "Continue with Google"
+              }
               variant="google"
               icon={<GoogleBrandIcon />}
               wrapIcon={false}
+              disabled={pendingProvider !== null || !isGoogleConfigured}
+              onPress={handleGoogleSignIn}
+              pending={pendingProvider === "google"}
             />
             <LiquidGlassSocialButton
-              label={isSignUpMode ? "Sign up with email" : "Log in with email"}
+              label={
+                pendingProvider === "email"
+                  ? "Sending code…"
+                  : isSignUpMode
+                    ? "Sign up with email"
+                    : "Log in with email"
+              }
               variant="email"
               icon={<MaterialCommunityIcons name="email-outline" size={20} color="#FFFFFF" />}
-            />
-            <LiquidGlassSocialButton
-              label={isSignUpMode ? "Sign up with Facebook" : "Continue with Facebook"}
-              variant="facebook"
-              icon={<Ionicons name="logo-facebook" size={20} color="#FFFFFF" />}
+              disabled={pendingProvider !== null || !isSupabaseClientConfigured}
+              onPress={() => {
+                setErrorMessage(null);
+                setEmailDraft("");
+                setEmailModalVisible(true);
+              }}
+              pending={pendingProvider === "email"}
             />
           </MotiView>
 
@@ -392,7 +559,13 @@ export default function Page() {
                   tint="light"
                   style={StyleSheet.absoluteFillObject}
                 />
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(239,248,255,0.96)" }]} pointerEvents="none" />
+                <View
+                  style={[
+                    StyleSheet.absoluteFillObject,
+                    { backgroundColor: "rgba(239,248,255,0.96)" },
+                  ]}
+                  pointerEvents="none"
+                />
                 <View
                   style={{
                     alignItems: "center",
@@ -428,10 +601,7 @@ export default function Page() {
                   >
                     Select country
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => setIsCountryModalVisible(false)}
-                    hitSlop={10}
-                  >
+                  <TouchableOpacity onPress={() => setIsCountryModalVisible(false)} hitSlop={10}>
                     <Ionicons name="close" size={22} color={GLASS.inkSoft} />
                   </TouchableOpacity>
                 </View>
@@ -501,6 +671,56 @@ export default function Page() {
           )}
         </AnimatePresence>
       </Modal>
+
+      <Modal
+        visible={emailModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEmailModalVisible(false)}
+      >
+        <View style={styles.emailScrim}>
+          <View style={styles.emailCard}>
+            <Text style={styles.emailTitle}>Sign in with email</Text>
+            <Text style={styles.emailSub}>
+              We'll send a six-digit code to your inbox.
+            </Text>
+            <TextInput
+              value={emailDraft}
+              onChangeText={setEmailDraft}
+              placeholder="you@example.com"
+              placeholderTextColor={GLASS.inkFaint}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              style={styles.emailInput}
+            />
+            <View style={styles.emailButtonRow}>
+              <Pressable
+                onPress={() => setEmailModalVisible(false)}
+                style={({ pressed }) => [styles.emailCancel, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.emailCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleEmailSubmit}
+                disabled={!emailDraft.trim() || pendingProvider !== null}
+                style={({ pressed }) => [
+                  styles.emailSubmit,
+                  (!emailDraft.trim() || pendingProvider !== null) && { opacity: 0.5 },
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                {pendingProvider === "email" ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.emailSubmitText}>Send code</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -547,6 +767,7 @@ function LiquidGlassSocialButton({
   centerLabelAndChevron = false,
   chevronName = "chevron-forward",
   disabled,
+  pending = false,
 }: {
   label: string;
   icon?: React.ReactNode;
@@ -557,6 +778,7 @@ function LiquidGlassSocialButton({
   centerLabelAndChevron?: boolean;
   chevronName?: React.ComponentProps<typeof Ionicons>["name"];
   disabled?: boolean;
+  pending?: boolean;
 }) {
   const isGoogle = variant === "google";
   const defaultBackgroundColor = isGoogle
@@ -575,6 +797,8 @@ function LiquidGlassSocialButton({
   return (
     <Pressable
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [pressed && { opacity: 0.86 }]}
       onPress={onPress ?? (() => {})}
     >
@@ -622,13 +846,23 @@ function LiquidGlassSocialButton({
                 {icon}
               </View>
             ) : (
-              <View style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+              >
                 {icon}
               </View>
             )
           ) : null}
           {centerLabelAndChevron ? (
-            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
               <Text
                 style={{
                   ...typography.semibold,
@@ -654,7 +888,11 @@ function LiquidGlassSocialButton({
               >
                 {label}
               </Text>
-              <Ionicons name={chevronName} size={16} color={textAndChevronColor} />
+              {pending ? (
+                <ActivityIndicator size="small" color={textAndChevronColor} />
+              ) : (
+                <Ionicons name={chevronName} size={16} color={textAndChevronColor} />
+              )}
             </>
           )}
         </View>
@@ -662,3 +900,113 @@ function LiquidGlassSocialButton({
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  errorText: {
+    ...typography.semibold,
+    flex: 1,
+    fontSize: 12,
+    color: "#7F1D1D",
+    lineHeight: 16,
+  },
+  warningBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: V2.amberSoft,
+    borderWidth: 1,
+    borderColor: "rgba(122,63,0,0.2)",
+  },
+  warningText: {
+    ...typography.semibold,
+    flex: 1,
+    fontSize: 12,
+    color: V2.amberInk,
+    lineHeight: 16,
+  },
+  emailScrim: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  emailCard: {
+    width: "100%",
+    maxWidth: 360,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 22,
+  },
+  emailTitle: {
+    ...typography.bold,
+    fontSize: 22,
+    color: "#000000",
+    letterSpacing: -0.5,
+  },
+  emailSub: {
+    ...typography.semibold,
+    marginTop: 4,
+    fontSize: 13,
+    color: V2.muted,
+  },
+  emailInput: {
+    ...typography.semibold,
+    marginTop: 14,
+    height: 50,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: V2.hairlineStrong,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: "#000000",
+    backgroundColor: "#FAFAF7",
+  },
+  emailButtonRow: {
+    marginTop: 16,
+    flexDirection: "row",
+    gap: 10,
+  },
+  emailCancel: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 24,
+    backgroundColor: V2.cyanSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emailCancelText: {
+    ...typography.bold,
+    fontSize: 14,
+    color: V2.cyanInk,
+  },
+  emailSubmit: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 24,
+    backgroundColor: V2.blueDeep,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emailSubmitText: {
+    ...typography.bold,
+    fontSize: 14,
+    color: "#FFFFFF",
+  },
+});

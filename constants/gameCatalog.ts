@@ -181,6 +181,15 @@ export const HUB_INAPP_GAMES: HubInAppGame[] = [
     earnRate: "9 CR/min",
     badge: "Hot",
   },
+  {
+    id: "jigsaw-puzzle",
+    title: "Jigsaw Puzzle",
+    genre: "Puzzle",
+    icon: "puzzle-outline",
+    cardColor: "#BAE6FD",
+    earnRate: "11 CR/min",
+    badge: "New",
+  },
 ];
 
 export const HUB_PARTNER_GAMES: HubPartnerGame[] = [

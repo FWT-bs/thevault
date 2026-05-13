@@ -10,7 +10,7 @@ import { V2 } from "../constants/glassPalette";
 import { typography } from "../constants/typography";
 import { useCatalog } from "../services/features/catalog";
 import { useVaultLevel } from "../services/features/vaultLevel";
-import TabScreen from "./_tab-screen";
+import TabScreen from "../components/TabScreen";
 
 const FILTERS = ["All", "Hot", "New", "Cards", "Puzzle", "Arcade"] as const;
 
@@ -116,6 +116,7 @@ export default function GamesTab() {
               else if (game.id === "block-blast" || game.id === "block-puzzle") router.push("/block-blast");
               else if (game.id === "bricks-vs-balls") router.push("/bricks-vs-balls");
               else if (game.id === "color-stack") router.push("/color-stack");
+              else if (game.id === "jigsaw-puzzle") router.push("/jigsaw-puzzle");
               else router.push("/games-in-app");
             }}
           />

@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { formatSharePercent } from "@thevault/domain";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 
 import { FlatCard } from "../components/FlatCard";
@@ -13,7 +13,7 @@ import { useRewardedGrant } from "../services/features/monetization";
 import { useStreakSummary } from "../services/features/streak";
 import { useVaultLevel } from "../services/features/vaultLevel";
 import { useRefreshWallet, useWalletBalance } from "../services/features/wallet";
-import TabScreen from "./_tab-screen";
+import TabScreen from "../components/TabScreen";
 
 const RECOMMENDED = [
   { title: "Midnight High Roller", meta: "~12 CR/min", chip: "HOT", color: V2.amberSoft },
@@ -322,7 +322,10 @@ export default function HomeTab() {
             <Pressable
               style={styles.extraActionButton}
               onPress={() => {
-                // Share action - add your share logic here
+                Share.share({
+                  message:
+                    "Join me on The Vault — earn real cash from ads, games, and surveys. https://thevault.app",
+                }).catch(() => {});
               }}
             >
               <Ionicons name="share-social" size={13} color="#FFFFFF" />
@@ -330,7 +333,7 @@ export default function HomeTab() {
             </Pressable>
           </FlatCard>
         </Pressable>
-        <Pressable style={{ flex: 1 }}>
+        <Pressable style={{ flex: 1 }} onPress={() => router.push("/games-tab")}>
           <FlatCard radius={18} pad={14} style={styles.quickActionCard}>
             <View style={[styles.quickActionIconWrap, styles.quickActionIconWrapAmber]}>
               <Ionicons name="play-circle-outline" size={16} color={V2.amber} />
@@ -361,7 +364,13 @@ export default function HomeTab() {
           <View style={styles.sectionDot} />
           <Text style={styles.sectionTitle}>Recommended</Text>
         </View>
-        <Text style={styles.sectionAction}>See all</Text>
+        <Pressable
+          accessibilityRole="link"
+          hitSlop={8}
+          onPress={() => router.push("/games-tab")}
+        >
+          <Text style={styles.sectionAction}>See all</Text>
+        </Pressable>
       </View>
 
       <FlatCard radius={22} pad={0}>

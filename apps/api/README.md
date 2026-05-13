@@ -1,5 +1,20 @@
 # The Vault API (Vercel Route Scaffold)
 
+## Environment
+
+Create `apps/api/.env.local` from `apps/api/.env.example`, then paste:
+
+```sh
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SECRET_KEY=your_supabase_secret_key
+SUPABASE_PROJECT_ID=your-project-ref
+```
+
+`SUPABASE_SECRET_KEY` is intentionally server-only. If your project still uses
+the legacy service role JWT, you can set `SUPABASE_SERVICE_ROLE_KEY` instead.
+The Expo app should use `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the root
+`.env.local` file.
+
 ## Key routes
 
 - `GET /api/auth/me`

@@ -27,7 +27,27 @@
       "Read(//private/tmp/streak-design/vault/chats/**)",
       "Read(//private/tmp/streak-design/vault/**)",
       "Bash(echo \"exit: $?\")",
-      "Bash(awk NR==1 || NR==1826 {print NR\": \"$0} *)"
+      "Bash(awk NR==1 || NR==1826 {print NR\": \"$0} *)",
+      "Bash(git -C /Users/fwt/Downloads/thevault-main mv app/_tab-screen.tsx components/TabScreen.tsx)",
+      "Bash(mv /Users/fwt/Downloads/thevault-main/app/_tab-screen.tsx /Users/fwt/Downloads/thevault-main/components/TabScreen.tsx)",
+      "Bash(git -C /Users/fwt/Downloads/thevault-main mv app/word-ladder.tsx components/games/word-ladder/WordLadderGame.tsx)",
+      "Bash(perl -pi -e 's#\\(from |require\\\\\\(\\)\"\\\\.\\\\./\\([^.\"]\\)#$1\"../../$2#g' app/\\\\\\(games\\\\\\)/*.tsx app/\\\\\\(account\\\\\\)/*.tsx app/\\\\\\(wallet\\\\\\)/*.tsx app/\\\\\\(modals\\\\\\)/*.tsx)",
+      "Bash(./node_modules/.bin/tsc --noEmit -p tsconfig.json)",
+      "Bash(python3 -c \"import sys, json; d=json.load\\(sys.stdin\\); print\\('main:', d.get\\('main'\\)\\); print\\('module:', d.get\\('module'\\)\\); print\\('rn-main:', d.get\\('react-native'\\)\\); print\\('source:', d.get\\('source'\\)\\); print\\('types:', d.get\\('types'\\)\\)\")",
+      "Bash(python3 -c \"import sys, json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('files', []\\), indent=2\\)\\); print\\('---'\\); print\\(json.dumps\\(d.get\\('exports', {}\\), indent=2\\)\\)\")",
+      "Bash(npm install *)",
+      "Bash(pod install *)",
+      "Bash(awk NR>=95 && NR<=160 *)",
+      "Bash(curl -sSL https://app.mcpmarket.com/install/T0NdXS9THUluOhN2emqUkZ0eHVA-vH6L9-I3VXgzUwY)",
+      "Bash(bash)",
+      "Bash(command -v claude)",
+      "Read(//Users/fwt/.claude/plugins/mcpmarket-my-toolkit/**)",
+      "Bash(/Users/fwt/.npm-global/bin/claude plugin *)",
+      "Bash(npm view *)",
+      "Bash(npm run *)",
+      "Bash(npm ls *)",
+      "Bash(git --no-pager diff HEAD -- package.json)",
+      "Bash(git --no-pager diff HEAD -- apps/api/package.json)"
     ]
   }
 }

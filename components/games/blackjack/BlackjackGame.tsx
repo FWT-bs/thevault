@@ -195,6 +195,17 @@ function isBlackjack(hand: Card[]): boolean {
   return hand.length === 2 && handScore(hand) === 21;
 }
 
+function isSplittablePair(hand: Card[]): boolean {
+  return hand.length === 2 && hand[0].rank === hand[1].rank && !isBlackjack(hand);
+}
+
+function outcomeVsDealer(playerHand: Card[], dealerFinal: number): "win" | "lose" | "push" {
+  const p = handScore(playerHand);
+  if (dealerFinal > 21 || p > dealerFinal) return "win";
+  if (p === dealerFinal) return "push";
+  return "lose";
+}
+
 function isRedSuit(suit: Suit): boolean {
   return suit === "heart" || suit === "diamond";
 }
@@ -309,12 +320,16 @@ function GameplayScreen({
   const compact = width < 380;
   const shortScreen = height < 760;
   const [deck, setDeck] = useState<Card[]>(() => freshDeck());
-  const [playerHand, setPlayerHand] = useState<Card[]>([]);
+  const [playerHands, setPlayerHands] = useState<Card[][]>([]);
+  const [activeHandIndex, setActiveHandIndex] = useState(0);
+  const [handBets, setHandBets] = useState<number[]>([]);
+  const [handsDone, setHandsDone] = useState<boolean[]>([]);
   const [dealerHand, setDealerHand] = useState<Card[]>([]);
   const [betStack, setBetStack] = useState<number[]>([DEFAULT_BET]);
-  const [activeBet, setActiveBet] = useState(DEFAULT_BET);
   const [gameState, setGameState] = useState<GameState>("idle");
   const [outcome, setOutcome] = useState<Outcome>(null);
+  const [resultCaption, setResultCaption] = useState<string | null>(null);
+  const [resultPayoutOverride, setResultPayoutOverride] = useState<string | null>(null);
   const [chipAnimKey, setChipAnimKey] = useState(0);
   const isWagerMode = playMode === "wager";
 
@@ -322,14 +337,29 @@ function GameplayScreen({
     () => betStack.reduce((sum, value) => sum + value, 0),
     [betStack],
   );
-  const playerScore = handScore(playerHand);
+  const activePlayerHand = playerHands[activeHandIndex] ?? [];
+  const playerScore = handScore(activePlayerHand);
+  const hasSplit = playerHands.length === 2;
   const dealerScore = handScore(dealerHand);
   const dealerVisibleScore = visibleScore(dealerHand);
+  const activeHandBet = handBets[activeHandIndex] ?? 0;
   const canDeal =
     gameState === "idle" && (!isWagerMode || (currentBet > 0 && currentBet <= credits));
   const canDouble =
-    isWagerMode && gameState === "player" && playerHand.length === 2 && credits >= activeBet;
-  const displayedBet = isWagerMode ? (gameState === "idle" ? currentBet : activeBet) : null;
+    isWagerMode &&
+    gameState === "player" &&
+    activePlayerHand.length === 2 &&
+    credits >= activeHandBet;
+  const canSplitNow =
+    gameState === "player" &&
+    playerHands.length === 1 &&
+    isSplittablePair(playerHands[0]) &&
+    (!isWagerMode || credits >= (handBets[0] ?? 0));
+  const displayedBet = isWagerMode
+    ? gameState === "idle"
+      ? currentBet
+      : activeHandBet
+    : null;
   const moveTitle =
     gameState === "idle"
       ? isWagerMode
@@ -342,36 +372,103 @@ function GameplayScreen({
           : "Round complete";
 
   const settle = useCallback(
-    (nextOutcome: NonNullable<Outcome>, bet: number) => {
+    (nextOutcome: NonNullable<Outcome>, bet: number, caption: string | null = null) => {
       setGameState("done");
       setOutcome(nextOutcome);
-
-      if (!isWagerMode) return;
-
-      if (nextOutcome === "blackjack") {
-        setCredits((value) => value + Math.round(bet * 2.5));
+      setResultCaption(caption);
+      if (isWagerMode) {
+        const payout =
+          nextOutcome === "blackjack"
+            ? Math.round(bet * 2.5)
+            : nextOutcome === "win"
+              ? bet * 2
+              : nextOutcome === "push"
+                ? bet
+                : 0;
+        setResultPayoutOverride(`${payout.toLocaleString()} CR`);
+        if (nextOutcome === "blackjack") {
+          setCredits((value) => value + Math.round(bet * 2.5));
+          return;
+        }
+        if (nextOutcome === "win") {
+          setCredits((value) => value + bet * 2);
+          return;
+        }
+        if (nextOutcome === "push") {
+          setCredits((value) => value + bet);
+          return;
+        }
         return;
       }
+      setResultPayoutOverride(null);
+    },
+    [isWagerMode, setCredits],
+  );
 
-      if (nextOutcome === "win") {
-        setCredits((value) => value + bet * 2);
-        return;
+  const settleSplitAgainstDealer = useCallback(
+    (hands: Card[][], bets: number[], dealerFinal: number) => {
+      const lines: string[] = [];
+      let creditDelta = 0;
+      let wins = 0;
+      let losses = 0;
+
+      for (let i = 0; i < hands.length; i += 1) {
+        const hand = hands[i];
+        const bet = bets[i] ?? 0;
+        if (isBust(hand)) {
+          lines.push(`Hand ${i + 1}: Bust`);
+          losses += 1;
+          continue;
+        }
+        const r = outcomeVsDealer(hand, dealerFinal);
+        if (r === "win") {
+          lines.push(`Hand ${i + 1}: Win`);
+          wins += 1;
+          creditDelta += bet * 2;
+        } else if (r === "push") {
+          lines.push(`Hand ${i + 1}: Push`);
+          creditDelta += bet;
+        } else {
+          lines.push(`Hand ${i + 1}: Lose`);
+          losses += 1;
+        }
       }
 
-      if (nextOutcome === "push") {
-        setCredits((value) => value + bet);
+      if (isWagerMode) {
+        setCredits((value) => value + creditDelta);
+        setResultPayoutOverride(`${creditDelta.toLocaleString()} CR`);
+      } else {
+        setResultPayoutOverride(null);
       }
+
+      let aggregate: NonNullable<Outcome>;
+      if (wins > 0 && losses === 0) aggregate = "win";
+      else if (wins === 0 && losses > 0) aggregate = "lose";
+      else if (wins > 0 && losses > 0) {
+        if (creditDelta > 0) aggregate = "win";
+        else if (creditDelta < 0) aggregate = "lose";
+        else aggregate = "push";
+      } else aggregate = "push";
+
+      setGameState("done");
+      setOutcome(aggregate);
+      setResultCaption(lines.join(" · "));
     },
     [isWagerMode, setCredits],
   );
 
   const triggerDealerTurn = useCallback(
-    (finalPlayerHand: Card[], currentDeck: Card[], bet: number, currentDealerHand: Card[]) => {
+    (
+      finalHands: Card[][],
+      finalBets: number[],
+      currentDeck: Card[],
+      currentDealerHand: Card[],
+    ) => {
       const revealedDealer = currentDealerHand.map((card) => ({ ...card, hidden: false }));
       setDealerHand(revealedDealer);
       setGameState("dealer");
 
-      const playerFinal = handScore(finalPlayerHand);
+      const playerScores = finalHands.map((h) => handScore(h));
       runDealer(
         revealedDealer,
         currentDeck,
@@ -380,21 +477,30 @@ function GameplayScreen({
           setDeck(nextDeck);
         },
         (dealerFinal) => {
-          if (dealerFinal > 21 || playerFinal > dealerFinal) {
-            settle("win", bet);
+          if (finalHands.length === 1) {
+            const playerFinal = playerScores[0];
+            const bet = finalBets[0] ?? 0;
+            if (isBust(finalHands[0])) {
+              settle("bust", bet);
+              return;
+            }
+            if (dealerFinal > 21 || playerFinal > dealerFinal) {
+              settle("win", bet);
+              return;
+            }
+            if (dealerFinal === playerFinal) {
+              settle("push", bet);
+              return;
+            }
+            settle("lose", bet);
             return;
           }
 
-          if (dealerFinal === playerFinal) {
-            settle("push", bet);
-            return;
-          }
-
-          settle("lose", bet);
+          settleSplitAgainstDealer(finalHands, finalBets, dealerFinal);
         },
       );
     },
-    [settle],
+    [settle, settleSplitAgainstDealer],
   );
 
   const deal = useCallback(() => {
@@ -410,10 +516,14 @@ function GameplayScreen({
     const dealerNatural = isBlackjack([dealerOne, dealerTwo]);
 
     setDeck(draw.deck);
-    setPlayerHand(playerCards);
+    setPlayerHands([playerCards]);
+    setActiveHandIndex(0);
+    setHandBets([bet]);
+    setHandsDone([false]);
     setDealerHand(dealerCards);
-    setActiveBet(bet);
     setOutcome(null);
+    setResultCaption(null);
+    setResultPayoutOverride(null);
     if (isWagerMode) {
       setCredits((value) => value - bet);
     }
@@ -480,61 +590,222 @@ function GameplayScreen({
     clearBet();
   }, [clearBet]);
 
+  const advanceAfterHandResolved = useCallback(
+    (
+      nextHands: Card[][],
+      nextBets: number[],
+      nextDone: boolean[],
+      deckAfter: Card[],
+    ) => {
+      if (nextHands.length === 1) {
+        triggerDealerTurn(nextHands, nextBets, deckAfter, dealerHand);
+        return;
+      }
+      const nextIdx = nextDone.findIndex((d, i) => !d && !isBust(nextHands[i]));
+      if (nextIdx >= 0) {
+        setHandsDone(nextDone);
+        setActiveHandIndex(nextIdx);
+        return;
+      }
+      setHandsDone(nextDone);
+      triggerDealerTurn(nextHands, nextBets, deckAfter, dealerHand);
+    },
+    [dealerHand, triggerDealerTurn],
+  );
+
   const hit = useCallback(() => {
     if (gameState !== "player") return;
 
+    const idx = activeHandIndex;
+    const hands = playerHands;
+    const hand = hands[idx];
+    if (!hand) return;
+
     const draw = drawCards(deck, 1);
-    const nextHand = [...playerHand, draw.cards[0]];
+    const nextHand = [...hand, draw.cards[0]];
+    const nextHands = hands.map((h, i) => (i === idx ? nextHand : h));
     setDeck(draw.deck);
-    setPlayerHand(nextHand);
+    setPlayerHands(nextHands);
 
     if (isBust(nextHand)) {
-      settle("bust", activeBet);
+      const nextDone = handsDone.map((d, i) => (i === idx ? true : d));
+      setHandsDone(nextDone);
+      if (nextHands.length === 1) {
+        settle("bust", handBets[0] ?? 0);
+        return;
+      }
+      if (nextHands.every(isBust)) {
+        triggerDealerTurn(nextHands, handBets, draw.deck, dealerHand);
+        return;
+      }
+      advanceAfterHandResolved(nextHands, handBets, nextDone, draw.deck);
       return;
     }
 
     if (handScore(nextHand) === 21) {
-      triggerDealerTurn(nextHand, draw.deck, activeBet, dealerHand);
+      const nextDone = handsDone.map((d, i) => (i === idx ? true : d));
+      if (nextHands.length === 1) {
+        setHandsDone(nextDone);
+        triggerDealerTurn(nextHands, handBets, draw.deck, dealerHand);
+        return;
+      }
+      advanceAfterHandResolved(nextHands, handBets, nextDone, draw.deck);
     }
-  }, [activeBet, dealerHand, deck, gameState, playerHand, settle, triggerDealerTurn]);
+  }, [
+    activeHandIndex,
+    advanceAfterHandResolved,
+    dealerHand,
+    deck,
+    gameState,
+    handBets,
+    handsDone,
+    playerHands,
+    settle,
+    triggerDealerTurn,
+  ]);
 
   const stand = useCallback(() => {
     if (gameState !== "player") return;
-    triggerDealerTurn(playerHand, deck, activeBet, dealerHand);
-  }, [activeBet, dealerHand, deck, gameState, playerHand, triggerDealerTurn]);
+
+    const idx = activeHandIndex;
+    const nextDone = handsDone.map((d, i) => (i === idx ? true : d));
+
+    if (playerHands.length === 1) {
+      setHandsDone(nextDone);
+      triggerDealerTurn(playerHands, handBets, deck, dealerHand);
+      return;
+    }
+
+    const nextIdx = nextDone.findIndex((d, i) => !d);
+    if (nextIdx >= 0) {
+      setHandsDone(nextDone);
+      setActiveHandIndex(nextIdx);
+      return;
+    }
+    setHandsDone(nextDone);
+    triggerDealerTurn(playerHands, handBets, deck, dealerHand);
+  }, [
+    activeHandIndex,
+    dealerHand,
+    deck,
+    gameState,
+    handBets,
+    handsDone,
+    playerHands,
+    triggerDealerTurn,
+  ]);
 
   const doubleDown = useCallback(() => {
     if (!canDouble) return;
 
+    const idx = activeHandIndex;
+    const unitBet = handBets[idx] ?? 0;
     const draw = drawCards(deck, 1);
-    const nextHand = [...playerHand, draw.cards[0]];
-    const nextBet = activeBet * 2;
+    const nextHand = [...activePlayerHand, draw.cards[0]];
+    const nextHands = playerHands.map((h, i) => (i === idx ? nextHand : h));
+    const nextBets = handBets.map((b, i) => (i === idx ? b * 2 : b));
     setDeck(draw.deck);
-    setPlayerHand(nextHand);
-    setActiveBet(nextBet);
-    setCredits((value) => value - activeBet);
+    setPlayerHands(nextHands);
+    setHandBets(nextBets);
+    if (isWagerMode) {
+      setCredits((value) => value - unitBet);
+    }
+
+    const nextDone = handsDone.map((d, i) => (i === idx ? true : d));
 
     if (isBust(nextHand)) {
-      settle("bust", nextBet);
+      setHandsDone(nextDone);
+      if (nextHands.length === 1) {
+        settle("bust", nextBets[idx] ?? 0);
+        return;
+      }
+      if (nextHands.every(isBust)) {
+        triggerDealerTurn(nextHands, nextBets, draw.deck, dealerHand);
+        return;
+      }
+      advanceAfterHandResolved(nextHands, nextBets, nextDone, draw.deck);
       return;
     }
 
-    triggerDealerTurn(nextHand, draw.deck, nextBet, dealerHand);
+    if (nextHands.length === 1) {
+      setHandsDone(nextDone);
+      triggerDealerTurn(nextHands, nextBets, draw.deck, dealerHand);
+      return;
+    }
+    advanceAfterHandResolved(nextHands, nextBets, nextDone, draw.deck);
   }, [
-    activeBet,
+    activeHandIndex,
+    activePlayerHand,
+    advanceAfterHandResolved,
     canDouble,
     dealerHand,
     deck,
-    playerHand,
+    gameState,
+    handBets,
+    handsDone,
+    isWagerMode,
+    playerHands,
     setCredits,
     settle,
     triggerDealerTurn,
   ]);
 
+  const split = useCallback(() => {
+    if (!canSplitNow) return;
+
+    const h0 = playerHands[0];
+    const [c1, c2] = h0;
+    const d1 = drawCards(deck, 1);
+    const d2 = drawCards(d1.deck, 1);
+    const unit = handBets[0] ?? 0;
+    const newHands: Card[][] = [
+      [c1, d1.cards[0]],
+      [c2, d2.cards[0]],
+    ];
+    setDeck(d2.deck);
+    setPlayerHands(newHands);
+    setHandBets([unit, unit]);
+    setHandsDone([false, false]);
+    setActiveHandIndex(0);
+    if (isWagerMode) {
+      setCredits((value) => value - unit);
+    }
+
+    const s0 = handScore(newHands[0]);
+    const s1 = handScore(newHands[1]);
+    if (s0 === 21 && s1 === 21) {
+      setHandsDone([true, true]);
+      triggerDealerTurn(newHands, [unit, unit], d2.deck, dealerHand);
+      return;
+    }
+    if (s0 === 21) {
+      setHandsDone([true, false]);
+      setActiveHandIndex(1);
+      return;
+    }
+    if (s1 === 21) {
+      setHandsDone([false, true]);
+    }
+  }, [
+    canSplitNow,
+    dealerHand,
+    deck,
+    handBets,
+    isWagerMode,
+    playerHands,
+    setCredits,
+    triggerDealerTurn,
+  ]);
+
   const newHand = useCallback(() => {
-    setPlayerHand([]);
+    setPlayerHands([]);
+    setHandBets([]);
+    setHandsDone([]);
+    setActiveHandIndex(0);
     setDealerHand([]);
     setOutcome(null);
+    setResultCaption(null);
+    setResultPayoutOverride(null);
     setGameState("idle");
   }, []);
 
@@ -591,13 +862,24 @@ function GameplayScreen({
           <MovePrompt title={moveTitle} bet={displayedBet} />
 
           <PlayerRail
-            label="You"
-            score={playerHand.length > 0 ? playerScore : null}
-            cards={playerHand}
-            active={gameState === "player"}
-            danger={playerScore > 21}
+            label={hasSplit ? "Hand 1" : "You"}
+            score={playerHands[0]?.length ? handScore(playerHands[0]) : null}
+            cards={playerHands[0] ?? []}
+            active={gameState === "player" && activeHandIndex === 0}
+            danger={isBust(playerHands[0] ?? [])}
             variant="player"
           />
+
+          {hasSplit ? (
+            <PlayerRail
+              label="Hand 2"
+              score={playerHands[1]?.length ? handScore(playerHands[1]) : null}
+              cards={playerHands[1] ?? []}
+              active={gameState === "player" && activeHandIndex === 1}
+              danger={isBust(playerHands[1] ?? [])}
+              variant="player"
+            />
+          ) : null}
         </View>
 
         <View style={styles.controls}>
@@ -660,6 +942,12 @@ function GameplayScreen({
                     onPress={handleUndoPress}
                   />
                   <IdleControlButton
+                    label="Split"
+                    icon="card-multiple-outline"
+                    disabled={!canSplitNow}
+                    onPress={split}
+                  />
+                  <IdleControlButton
                     label="Deal"
                     icon="cards-playing-outline"
                     primary
@@ -677,7 +965,13 @@ function GameplayScreen({
               </>
             ) : (
               <View style={styles.normalControls}>
-                <View style={styles.normalDealButtonWrap}>
+                <View style={styles.normalSplitDealRow}>
+                  <IdleControlButton
+                    label="Split"
+                    icon="card-multiple-outline"
+                    disabled={!canSplitNow}
+                    onPress={split}
+                  />
                   <IdleControlButton
                     label="Deal"
                     icon="cards-playing-outline"
@@ -692,6 +986,13 @@ function GameplayScreen({
             <View style={[styles.actionGrid, !isWagerMode && styles.actionGridSimple]}>
               <ActionButton label="Hit" icon="cards-playing-outline" tone="primary" onPress={hit} />
               <ActionButton label="Stand" icon="shield-outline" tone="soft" onPress={stand} />
+              <ActionButton
+                label="Split"
+                icon="card-multiple-outline"
+                tone="soft"
+                disabled={!canSplitNow}
+                onPress={split}
+              />
               {isWagerMode ? (
                 <>
                   <ActionButton
@@ -719,8 +1020,10 @@ function GameplayScreen({
       {outcome !== null && gameState === "done" ? (
         <ResultOverlay
           outcome={outcome}
-          bet={activeBet}
+          bet={activeHandBet}
           isWagerMode={isWagerMode}
+          caption={resultCaption}
+          payoutOverride={resultPayoutOverride}
           onNewHand={newHand}
         />
       ) : null}
@@ -979,19 +1282,31 @@ function ResultOverlay({
   outcome,
   bet,
   isWagerMode,
+  caption,
+  payoutOverride,
   onNewHand,
 }: {
   outcome: NonNullable<Outcome>;
   bet: number;
   isWagerMode: boolean;
+  caption: string | null;
+  payoutOverride: string | null;
   onNewHand: () => void;
 }) {
   const meta = OUTCOME_META[outcome];
-  const payout =
+  const defaultPayout =
     outcome === "blackjack" ? Math.round(bet * 2.5) :
     outcome === "win" ? bet * 2 :
     outcome === "push" ? bet : 0;
-  const subText = isWagerMode ? meta.sub : NORMAL_OUTCOME_COPY[outcome];
+  const subText =
+    caption && caption.length > 0
+      ? caption
+      : isWagerMode
+        ? meta.sub
+        : NORMAL_OUTCOME_COPY[outcome];
+  const payoutLine = isWagerMode
+    ? (payoutOverride ?? `${defaultPayout > 0 ? defaultPayout.toLocaleString() : "0"} CR`)
+    : "Normal";
 
   return (
     <Modal transparent animationType="none" statusBarTranslucent>
@@ -1017,9 +1332,7 @@ function ResultOverlay({
             <Text style={styles.resultPayoutLabel}>
               {isWagerMode ? "Payout" : "Mode"}
             </Text>
-            <Text style={styles.resultPayoutValue}>
-              {isWagerMode ? `${payout > 0 ? payout.toLocaleString() : "0"} CR` : "Normal"}
-            </Text>
+            <Text style={styles.resultPayoutValue}>{payoutLine}</Text>
           </View>
 
           <View style={styles.resultButtonFrame}>
@@ -1388,8 +1701,11 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.66)",
     letterSpacing: 0,
   },
-  normalDealButtonWrap: {
-    width: 132,
+  normalSplitDealRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 12,
     minHeight: 76,
   },
   idleControlButton: {

@@ -5,22 +5,31 @@ This is the single source of truth for UI work in this repo. Read this before ch
 ## Repo Truths
 
 - This is an Expo Router React Native app.
-- Main routes live in `app/`.
-- Shared UI lives in `components/`.
+- Main routes live in `app/`, organized by feature area into route groups:
+  - `app/(games)/` — game routes (blackjack, word-ladder, etc.) and the game library pages
+  - `app/(account)/` — profile, settings, vault level, activity, notifications, etc.
+  - `app/(wallet)/` — wallet sub-pages (redeem, payment methods, transactions, boost)
+  - `app/(modals)/` — full-screen modal presentations (streak-claim)
+  - `app/(tabs)/` — native tab triggers
+  - Top-level files: `_layout.tsx`, `index.tsx` (login), `onboarding.tsx`, the four tab screens (`home.tsx`, `games.tsx`, `wallet.tsx`, `profile.tsx`), and `swift-ui-demo*`
+- Route groups (folders with parentheses) do not affect URLs. `/blackjack` still resolves to `app/(games)/blackjack.tsx`.
+- Shared UI lives in `components/`. `TabScreen` is at `components/TabScreen.tsx`.
 - Reusable constants live in `constants/`.
 - Large game implementations should live under `components/games/<game-id>/`.
-- Route files should stay thin. Example: `app/blackjack.tsx` only re-exports `components/games/blackjack/BlackjackGame.tsx`.
+- Route files should stay thin. Example: `app/(games)/blackjack.tsx` only re-exports `components/games/blackjack/BlackjackGame.tsx`.
+- A `createGameRoute(...)` helper at `components/games/createGameRoute.tsx` wires the standard launch→loading→playing→result lifecycle, so new games only have to write the gameplay screen. See "Fastest path: createGameRoute" below.
+- A copy-pasteable starter lives at `components/games/_template/StarterGame.tsx`.
 - Do not recreate old root HTML mockups or scattered Markdown specs. This file replaces them.
-- Do not add a second blackjack route. There should be no `app/blackjack-new.tsx`.
+- Do not add a second blackjack route. There should be no `app/(games)/blackjack-new.tsx`.
 
 ## Canonical Blackjack
 
 Use these files:
 
-- Route: `app/blackjack.tsx`
+- Route: `app/(games)/blackjack.tsx`
 - Implementation: `components/games/blackjack/BlackjackGame.tsx`
 - Game metadata: `constants/gameTemplates.ts`
-- Game library card: `app/games-in-app.tsx`
+- Game library card: `app/(games)/games-in-app.tsx`
 - Earn tab entry: `app/games.tsx`
 
 Blackjack uses the shared launch page before the loader. There is no intermediate landing page in the active flow.
@@ -268,14 +277,56 @@ Generic game launch flow:
 - Game metadata goes in `constants/gameTemplates.ts`.
 - Pre-loading launch page uses `components/v2/GameLaunchPage.tsx`.
 - Generic loading screen uses `components/v2/GameLoader.tsx`.
-- Real gameplay goes in `components/games/<game-id>/<GameName>.tsx`.
-- Route file in `app/<game-id>.tsx` should be a thin export.
+- Real gameplay goes in `components/games/<game-id>/<GameName>Game.tsx`.
+- Route file in `app/(games)/<game-id>.tsx` should be a thin export.
 
 Example route:
 
 ```tsx
-export { default } from "../components/games/blackjack/BlackjackGame";
+// app/(games)/blackjack.tsx
+export { default } from "../../components/games/blackjack/BlackjackGame";
 ```
+
+## Fastest path: createGameRoute
+
+If you do not need a custom launch/loader/result UI, use `createGameRoute` to skip the boilerplate. You only need to implement the gameplay screen.
+
+Three steps to ship a new game:
+
+1. **Add a config entry** in `constants/gameTemplates.ts` (keyed by your stable lowercase `gameId`).
+2. **Create your gameplay screen** under `components/games/<game-id>/<GameName>Game.tsx` by copying `components/games/_template/StarterGame.tsx`. Wrap it with `createGameRoute({ gameId, modeOptions, GameplayScreen })`.
+3. **Add a thin route** at `app/(games)/<game-id>.tsx`:
+
+```tsx
+export { default } from "../../components/games/<game-id>/<GameName>Game";
+```
+
+Then register the route name in `app/(games)/_layout.tsx` and add the navigation entry in `app/games.tsx` and `app/(games)/games-in-app.tsx`.
+
+Minimal gameplay shape — the helper passes everything else (session start/complete, accent colors, mode label, exit/finish callbacks):
+
+```tsx
+import { createGameRoute, type GameplayScreenProps } from "../createGameRoute";
+
+type ModeId = "classic" | "timed";
+
+function MyGameplay({ accent, accentSoft, onQuit, onFinish }: GameplayScreenProps<ModeId>) {
+  // Build the board, controls, HUD, pause modal. Call onFinish(score) when
+  // the round really ends. Call onQuit() to return to the launch page.
+  return /* ... */;
+}
+
+export default createGameRoute({
+  gameId: "my-game",
+  modeOptions: [
+    { id: "classic", label: "Classic", description: "Balanced round." },
+    { id: "timed", label: "Timed", description: "Fast countdown round." },
+  ],
+  GameplayScreen: MyGameplay,
+});
+```
+
+The helper handles: launch page (with mode selection), loader, session start (`/gameplay/start`), session complete (`/gameplay/complete`), default result screen, and the back/exit/play-again wiring. Existing games like Blackjack do not use this helper because they predate it — new games should.
 
 Rules:
 
@@ -301,10 +352,10 @@ Required file shape:
 
 ```txt
 constants/gameTemplates.ts
-app/_layout.tsx
-app/games.tsx
-app/games-in-app.tsx
-app/<game-id>.tsx
+app/(games)/_layout.tsx       # add the screen name
+app/games.tsx                  # route from the Earn tab
+app/(games)/games-in-app.tsx   # route from the game library
+app/(games)/<game-id>.tsx      # thin re-export
 components/games/<game-id>/<GameName>Game.tsx
 ```
 
@@ -312,7 +363,7 @@ The external builder should deliver only the route file, the game implementation
 
 ### End-to-end flow
 
-1. User taps a game card or Play button in `app/games.tsx` or `app/games-in-app.tsx`.
+1. User taps a game card or Play button in `app/games.tsx` or `app/(games)/games-in-app.tsx`.
 2. Navigation opens one canonical route, for example `router.push("/blackjack")`.
 3. The route re-exports the real game component from `components/games/<game-id>/`.
 4. The game component starts in `phase === "launch"`.
@@ -407,18 +458,17 @@ Config rules:
 ### Thin route
 
 ```tsx
-// app/my-game.tsx
-export { default } from "../components/games/my-game/MyGame";
+// app/(games)/my-game.tsx
+export { default } from "../../components/games/my-game/MyGame";
 ```
 
-Also register the route in `app/_layout.tsx`:
+Also register the route in `app/(games)/_layout.tsx` (the games group, not the root):
 
 ```tsx
-<Stack.Screen
-  name="my-game"
-  options={{ headerShown: false, title: "My Game", animation: "fade" }}
-/>
+<Stack.Screen name="my-game" options={{ title: "My Game" }} />
 ```
+
+The group layout already sets `headerShown: false` and `animation: "fade"` as defaults; only override what differs.
 
 ### Navigation from games screens
 
@@ -428,7 +478,7 @@ In `app/games.tsx`, the Play button should route to the real game:
 if (game.id === "my-game") router.push("/my-game");
 ```
 
-In `app/games-in-app.tsx`, route and return before the fallback mock session code:
+In `app/(games)/games-in-app.tsx`, route and return before the fallback mock session code:
 
 ```tsx
 if (game.id === "my-game") {
@@ -1046,10 +1096,10 @@ Reward rules:
 
 Before handing off a new game:
 
-- `games.tsx` routes to the game.
-- `games-in-app.tsx` routes to the game and returns before mock completion.
-- `app/_layout.tsx` has a single `Stack.Screen` for the route.
-- `app/<game-id>.tsx` is a thin export.
+- `app/games.tsx` routes to the game.
+- `app/(games)/games-in-app.tsx` routes to the game and returns before mock completion.
+- `app/(games)/_layout.tsx` has a single `Stack.Screen` for the route (or relies on group defaults).
+- `app/(games)/<game-id>.tsx` is a thin export.
 - `constants/gameTemplates.ts` contains the config and stable mode ids.
 - The launch page shows mode choices when more than one mode exists.
 - The primary Play button starts a session, then shows `GameLoader`.
@@ -1124,7 +1174,7 @@ Hero text:
 - Do not use deleted HTML mockups as implementation truth.
 - Do not recreate scattered docs.
 - Do not make `blackjack-new`.
-- Do not move blackjack back into `app/blackjack.tsx`.
+- Do not move blackjack back into `app/blackjack.tsx`. The canonical route is `app/(games)/blackjack.tsx`.
 - Do not reintroduce an intermediate blackjack landing page between loader and gameplay.
 - Do not build a custom tab bar.
 - Do not put layout-only styles directly on `Pressable` when the button has multiple children.

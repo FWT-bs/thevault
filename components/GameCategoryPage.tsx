@@ -16,7 +16,7 @@ import { typography } from "../constants/typography";
 import { useCatalog } from "../services/features/catalog";
 import { useVaultLevel } from "../services/features/vaultLevel";
 import { useOfferAttributionIngest } from "../services/features/offers";
-import TabScreen from "../app/_tab-screen";
+import TabScreen from "./TabScreen";
 import { GlassSurface } from "./GlassSurface";
 
 const PAGE_COPY: Record<CategoryId, { title: string; subtitle: string; kicker: string }> = {

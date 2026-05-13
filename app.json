@@ -15,7 +15,8 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.thevault"
+      "bundleIdentifier": "com.anonymous.thevault",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -30,6 +31,7 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      "./plugins/with-ios-26-warning-cleanups",
       [
         "expo-build-properties",
         {
@@ -37,7 +39,10 @@
             "deploymentTarget": "26.0"
           }
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-secure-store",
+      "expo-apple-authentication"
     ]
   }
 }
