@@ -4,7 +4,6 @@ import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { getUnityGameId, isUnityGameEnabled } from "../../constants/featureFlags";
 import { GAME_CONFIGS, GT } from "../../constants/gameTemplates";
 import { V2 } from "../../constants/glassPalette";
 import { typography } from "../../constants/typography";
@@ -108,20 +107,6 @@ export function createGameRoute<TModeId extends string>({
     };
 
     const handlePlay = async () => {
-      // If this game has a shippable Unity implementation enabled, route to
-      // the fullscreen Unity host instead of the local launch→loading→playing
-      // pipeline. UnityGameScreen starts its own backend session.
-      if (isUnityGameEnabled(gameId)) {
-        const unityGameId = getUnityGameId(gameId);
-        if (unityGameId) {
-          router.push({
-            pathname: "/unity-game",
-            params: { gameId: unityGameId, modeId },
-          });
-          return;
-        }
-      }
-
       try {
         const started = await startSession.mutateAsync({ gameId: cfg.id, modeId });
         setSessionId(started.session.id);

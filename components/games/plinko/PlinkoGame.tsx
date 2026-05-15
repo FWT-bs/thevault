@@ -1,6 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
+import { LayoutChangeEvent, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Rect } from "react-native-svg";
 
 import { V2 } from "../../../constants/glassPalette";
@@ -16,73 +15,88 @@ import { GameActionButton, InAppGameShell, type SecondaryAction } from "../_temp
 const GAME_ID = "plinko";
 
 const TUTORIAL_BULLETS = [
-  "Use Left / Right to aim the drop column, then tap DROP.",
-  "The center bucket pays the most — edges only pay a little.",
-  "Spare balls after clearing the target lock in a bonus.",
+  "Aim with Left / Right, then tap DROP — balls bounce off the pegs.",
+  "Center slot is the jackpot. Edges only pay a sliver.",
+  "You can fire-drop: queue another ball before the last one settles.",
 ];
 
 type PlinkoModeId = "casual" | "ranked" | "expert";
 
 const MODE_OPTIONS: ReadonlyArray<GameModeOption<PlinkoModeId>> = [
-  { id: "casual", label: "Casual", description: "5 balls per level, gentle ramp." },
+  { id: "casual", label: "Casual", description: "6 balls per level, gentle ramp." },
   { id: "ranked", label: "Ranked", description: "5 balls, higher targets each level." },
   { id: "expert", label: "Expert", description: "3 balls, dense pegs from the start." },
 ];
 
-type LevelDef = {
-  balls: number;
-  target: number;
-  pegRows: number;
-};
+type LevelDef = { balls: number; target: number; pegRows: number };
 
 const LEVELS: Record<PlinkoModeId, LevelDef[]> = {
   casual: [
-    { balls: 6, target: 100, pegRows: 6 },
-    { balls: 6, target: 180, pegRows: 7 },
-    { balls: 5, target: 250, pegRows: 7 },
-    { balls: 5, target: 350, pegRows: 8 },
-    { balls: 4, target: 450, pegRows: 8 },
+    { balls: 6, target: 250, pegRows: 6 },
+    { balls: 6, target: 400, pegRows: 7 },
+    { balls: 5, target: 550, pegRows: 7 },
+    { balls: 5, target: 750, pegRows: 8 },
+    { balls: 4, target: 950, pegRows: 8 },
   ],
   ranked: [
-    { balls: 5, target: 150, pegRows: 7 },
-    { balls: 5, target: 280, pegRows: 8 },
-    { balls: 4, target: 380, pegRows: 8 },
-    { balls: 4, target: 500, pegRows: 9 },
-    { balls: 3, target: 600, pegRows: 9 },
+    { balls: 5, target: 350, pegRows: 7 },
+    { balls: 5, target: 600, pegRows: 8 },
+    { balls: 4, target: 800, pegRows: 8 },
+    { balls: 4, target: 1100, pegRows: 9 },
+    { balls: 3, target: 1300, pegRows: 9 },
   ],
   expert: [
-    { balls: 3, target: 200, pegRows: 8 },
-    { balls: 3, target: 350, pegRows: 9 },
-    { balls: 3, target: 500, pegRows: 9 },
-    { balls: 2, target: 650, pegRows: 10 },
+    { balls: 3, target: 500, pegRows: 8 },
+    { balls: 3, target: 800, pegRows: 9 },
+    { balls: 3, target: 1200, pegRows: 9 },
+    { balls: 2, target: 1500, pegRows: 10 },
   ],
 };
 
-function bucketScores(buckets: number): number[] {
-  // V-shape: center is highest, edges low.
-  const middle = (buckets - 1) / 2;
-  return Array.from({ length: buckets }, (_, i) => {
-    const distance = Math.abs(i - middle);
-    if (distance < 0.6) return 100;
-    if (distance < 1.6) return 50;
-    if (distance < 2.6) return 25;
+// Triangular peg field: row r has TOP_ROW_COUNT + r pegs (matches the
+// PlinkoPegField.cs layout). Bottom row width = (TOP_ROW_COUNT + rows - 1).
+const TOP_ROW_COUNT = 3;
+
+// Score table: V-shape with a single jackpot in the center (Unity slot
+// flavor — see PlinkoSlot.cs, where each slot carries its own Points).
+function bucketScores(slots: number): number[] {
+  const center = (slots - 1) / 2;
+  return Array.from({ length: slots }, (_, i) => {
+    const normalized = Math.abs(i - center) / Math.max(center, 1);
+    if (normalized < 0.08) return 500; // jackpot
+    if (normalized < 0.28) return 250;
+    if (normalized < 0.5) return 100;
+    if (normalized < 0.72) return 50;
+    if (normalized < 0.9) return 25;
     return 10;
   });
 }
 
-function simulatePath(startCol: number, rows: number): number[] {
-  // Walks down the staggered pegs; the column count alternates rows+1, rows etc.
-  // We simulate a coarse left/right bounce, returning column index at each row.
-  let column = startCol;
-  const path: number[] = [column];
-  for (let r = 0; r < rows; r++) {
-    const direction = Math.random() < 0.5 ? -1 : 1;
-    column = Math.max(0, Math.min(rows, column + (direction > 0 ? 1 : 0)));
-    // Shift selection probability if at edge.
-    path.push(column);
-  }
-  return path;
-}
+// Physics tuning. These map roughly to the Unity Rigidbody2D defaults in
+// PlinkoBall.cs (gravity 1, mass 0.2, restitution 0.4, drag 0.05).
+const GRAVITY_PX_PER_S2 = 1300;
+const RESTITUTION = 0.5;
+const WALL_RESTITUTION = 0.6;
+const DRAG = 0.06;
+const BALL_RADIUS = 7;
+const PEG_RADIUS = 4.2;
+const SPAWN_JITTER_PX = 6; // matches PlinkoController._ballSpawnJitterX
+const SETTLED_DESPAWN_MS = 700;
+const MAX_LIFETIME_MS = 8000; // PlinkoBall.MaxLifetimeSeconds = 8
+
+type Vec = { x: number; y: number };
+type Peg = Vec & { r: number };
+type Ball = {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  settled: boolean;
+  bucketIdx: number | null;
+  bornAt: number;
+};
 
 function PlinkoGameplay({
   title,
@@ -102,28 +116,190 @@ function PlinkoGameplay({
   const [totalScore, setTotalScore] = useState(0);
   const [paused, setPaused] = useState(false);
   const [ballsLeft, setBallsLeft] = useState(levelsForMode[0].balls);
-  const [dropCol, setDropCol] = useState(Math.floor(levelsForMode[0].pegRows / 2));
-  const [dropping, setDropping] = useState(false);
-  const [activePath, setActivePath] = useState<{ xs: number[]; ys: number[] } | null>(null);
-  const [lastBucket, setLastBucket] = useState<{ idx: number; value: number } | null>(null);
   const [boardSize, setBoardSize] = useState({ width: 0, height: 0 });
-  const dropProgress = useRef(new Animated.Value(0)).current;
-  const dropAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const [lastBucket, setLastBucket] = useState<{ idx: number; value: number } | null>(null);
 
   const level = levelsForMode[levelIdx % levelsForMode.length];
-  const buckets = level.pegRows + 1;
-  const scoreTable = useMemo(() => bucketScores(buckets), [buckets]);
+  const slots = TOP_ROW_COUNT + level.pegRows - 1;
+  const scoreTable = useMemo(() => bucketScores(slots), [slots]);
   const targetReached = score >= level.target;
   const noBallsLeft = ballsLeft <= 0;
 
+  // Aim column index, 0..(slots-1). Dropped balls spawn above this slot.
+  const [aimCol, setAimCol] = useState(Math.floor(slots / 2));
+
+  // Layout math (selector lane on top, peg field in middle, bucket band
+  // on the bottom). Mirrors the PlinkoRoot scene from the Unity README.
+  const innerWidth = boardSize.width;
+  const innerHeight = boardSize.height;
+  const selectorH = 40;
+  const bucketH = 44;
+  const playH = Math.max(innerHeight - selectorH - bucketH - 8, 0);
+  const pegRows = level.pegRows;
+  const slotW = innerWidth > 0 ? innerWidth / slots : 0;
+  const colSpacing = slotW;
+  const rowSpacing = pegRows > 0 ? playH / (pegRows + 1) : 0;
+  const playTop = selectorH;
+  const floorY = innerHeight - bucketH;
+
+  // Pegs as a memoized array — geometry only, never mutated by the loop.
+  const pegs = useMemo<Peg[]>(() => {
+    if (innerWidth <= 0 || playH <= 0) return [];
+    const out: Peg[] = [];
+    for (let r = 0; r < pegRows; r++) {
+      const pegsInRow = TOP_ROW_COUNT + r;
+      const rowWidth = (pegsInRow - 1) * colSpacing;
+      const y = playTop + rowSpacing * (r + 1);
+      const xStart = (innerWidth - rowWidth) / 2;
+      for (let c = 0; c < pegsInRow; c++) {
+        out.push({ x: xStart + c * colSpacing, y, r: PEG_RADIUS });
+      }
+    }
+    return out;
+  }, [innerWidth, playH, pegRows, colSpacing, rowSpacing, playTop]);
+
+  // Aim column → world X for the spawn point.
+  const colX = useCallback(
+    (col: number) => slotW * col + slotW / 2,
+    [slotW],
+  );
+
+  // Mutable physics state lives in refs so the rAF loop can mutate it
+  // without forcing React reconciles per ball update.
+  const ballsRef = useRef<Ball[]>([]);
+  const ballIdRef = useRef(0);
+  const playingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const [, forceTick] = useState(0);
+
+  const stopLoop = useCallback(() => {
+    playingRef.current = false;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  const settleBall = useCallback(
+    (ball: Ball) => {
+      if (ball.settled) return;
+      ball.settled = true;
+      ball.vx = 0;
+      ball.vy = 0;
+      const idx = Math.max(0, Math.min(slots - 1, Math.floor(ball.x / slotW)));
+      ball.bucketIdx = idx;
+      const value = scoreTable[idx] ?? 0;
+      setScore((s) => s + value);
+      setLastBucket({ idx, value });
+      // Despawn after a brief pause so the player can see where it landed.
+      setTimeout(() => {
+        ballsRef.current = ballsRef.current.filter((b) => b.id !== ball.id);
+        forceTick((t) => t + 1);
+      }, SETTLED_DESPAWN_MS);
+    },
+    [scoreTable, slots, slotW],
+  );
+
+  const step = useCallback(
+    (dt: number) => {
+      const balls = ballsRef.current;
+      const now = performance.now();
+      for (const b of balls) {
+        if (b.settled) continue;
+        // Kill clipped balls (PlinkoBall.MaxLifetimeSeconds equivalent).
+        if (now - b.bornAt > MAX_LIFETIME_MS) {
+          settleBall(b);
+          continue;
+        }
+        // Gravity + drag.
+        b.vy += GRAVITY_PX_PER_S2 * dt;
+        b.vx *= 1 - DRAG * dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+
+        // Peg collisions — circle vs circle, separating + reflecting along
+        // the contact normal. Tiny horizontal jitter prevents the ball
+        // from balancing perfectly on a peg apex.
+        for (const p of pegs) {
+          const dx = b.x - p.x;
+          const dy = b.y - p.y;
+          const min = p.r + b.r;
+          const distSq = dx * dx + dy * dy;
+          if (distSq >= min * min || distSq <= 0.0001) continue;
+          const dist = Math.sqrt(distSq);
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const overlap = min - dist;
+          b.x += nx * overlap;
+          b.y += ny * overlap;
+          const vDotN = b.vx * nx + b.vy * ny;
+          if (vDotN < 0) {
+            b.vx -= (1 + RESTITUTION) * vDotN * nx;
+            b.vy -= (1 + RESTITUTION) * vDotN * ny;
+            b.vx += (Math.random() - 0.5) * 30;
+          }
+        }
+
+        // Walls — left/right are static colliders, matching the Unity scene.
+        if (b.x < b.r) {
+          b.x = b.r;
+          b.vx = -b.vx * WALL_RESTITUTION;
+        } else if (b.x > innerWidth - b.r) {
+          b.x = innerWidth - b.r;
+          b.vx = -b.vx * WALL_RESTITUTION;
+        }
+
+        // Floor → land in a slot.
+        if (b.y + b.r >= floorY) {
+          b.y = floorY - b.r;
+          settleBall(b);
+        }
+      }
+    },
+    [pegs, innerWidth, floorY, settleBall],
+  );
+
+  const ensureLoop = useCallback(() => {
+    if (playingRef.current) return;
+    playingRef.current = true;
+    let last = performance.now();
+    const loop = (now: number) => {
+      if (!playingRef.current) return;
+      const dt = Math.min((now - last) / 1000, 0.033);
+      last = now;
+      step(dt);
+      forceTick((t) => t + 1);
+      const stillRunning = ballsRef.current.some((b) => !b.settled);
+      if (stillRunning) {
+        rafRef.current = requestAnimationFrame(loop);
+      } else {
+        playingRef.current = false;
+        rafRef.current = null;
+      }
+    };
+    rafRef.current = requestAnimationFrame(loop);
+  }, [step]);
+
+  // Pause integration: when the shell pauses, freeze the loop. We resume
+  // on demand below.
+  useEffect(() => {
+    if (paused) stopLoop();
+    else if (ballsRef.current.some((b) => !b.settled)) ensureLoop();
+  }, [paused, ensureLoop, stopLoop]);
+
+  // Stop loop and clear balls on unmount or level change.
+  useEffect(() => () => stopLoop(), [stopLoop]);
+
   // Reset per-level state.
   useEffect(() => {
+    stopLoop();
+    ballsRef.current = [];
     setBallsLeft(level.balls);
     setScore(0);
-    setDropCol(Math.floor(level.pegRows / 2));
-    setActivePath(null);
+    setAimCol(Math.floor(slots / 2));
     setLastBucket(null);
-  }, [levelIdx, level.balls, level.pegRows]);
+    forceTick((t) => t + 1);
+  }, [levelIdx, level.balls, slots, stopLoop]);
 
   useEffect(() => {
     setLevelIdx(0);
@@ -140,86 +316,49 @@ function PlinkoGameplay({
     if (progress) merge({ lastLevel: levelIdx + 1 });
   }, [levelIdx, progress, merge]);
 
-  useEffect(() => () => {
-    if (dropAnimRef.current) dropAnimRef.current.stop();
-  }, []);
-
   const handleLayout = (event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
     setBoardSize({ width, height });
   };
 
   const dropBall = useCallback(() => {
-    if (dropping || noBallsLeft || targetReached) return;
-    if (boardSize.width === 0) return;
-
-    const pegRows = level.pegRows;
-    const colSpacing = boardSize.width / (pegRows + 1);
-    const selectorH = 40;
-    const bucketH = 36;
-    const playH = Math.max(boardSize.height - selectorH - bucketH - 8, 0);
-    const rowSpacing = pegRows > 0 ? playH / (pegRows + 1) : 0;
-    const colX = (col: number) => colSpacing / 2 + col * colSpacing;
-
-    const path = simulatePath(dropCol, pegRows);
-    const xs = path.map((c) => colX(c));
-    const ys = path.map((_, idx) => selectorH + rowSpacing * (idx + 1) - rowSpacing / 2);
-    // Final resting position is in the bucket band.
-    xs.push(colX(path[path.length - 1]));
-    ys.push(boardSize.height - bucketH / 2);
-
-    setDropping(true);
-    setBallsLeft((b) => b - 1);
-    setActivePath({ xs, ys });
-    dropProgress.setValue(0);
-
-    const duration = Math.max(900, 130 * pegRows + 300);
-    if (dropAnimRef.current) dropAnimRef.current.stop();
-    dropAnimRef.current = Animated.timing(dropProgress, {
-      toValue: 1,
-      duration,
-      easing: Easing.in(Easing.quad),
-      useNativeDriver: true,
-    });
-    dropAnimRef.current.start(({ finished }) => {
-      if (!finished) return;
-      const finalCol = path[path.length - 1];
-      const bucketIdx = Math.max(0, Math.min(buckets - 1, finalCol));
-      const value = scoreTable[bucketIdx];
-      setScore((s) => s + value);
-      setLastBucket({ idx: bucketIdx, value });
-      setActivePath(null);
-      setDropping(false);
-    });
-  }, [
-    dropping,
-    noBallsLeft,
-    targetReached,
-    boardSize,
-    dropCol,
-    level.pegRows,
-    buckets,
-    scoreTable,
-    dropProgress,
-  ]);
+    if (noBallsLeft || targetReached || paused) return;
+    if (innerWidth <= 0 || innerHeight <= 0) return;
+    const jitter = (Math.random() - 0.5) * 2 * SPAWN_JITTER_PX;
+    const x = Math.max(BALL_RADIUS, Math.min(innerWidth - BALL_RADIUS, colX(aimCol) + jitter));
+    const ball: Ball = {
+      id: ++ballIdRef.current,
+      x,
+      y: selectorH + BALL_RADIUS + 2,
+      vx: (Math.random() - 0.5) * 30,
+      vy: 0,
+      r: BALL_RADIUS,
+      settled: false,
+      bucketIdx: null,
+      bornAt: performance.now(),
+    };
+    ballsRef.current = [...ballsRef.current, ball];
+    setBallsLeft((n) => n - 1);
+    ensureLoop();
+    forceTick((t) => t + 1);
+  }, [noBallsLeft, targetReached, paused, innerWidth, innerHeight, colX, aimCol, ensureLoop]);
 
   const moveSelector = useCallback(
     (delta: number) => {
-      if (dropping) return;
-      setDropCol((c) => Math.max(0, Math.min(level.pegRows, c + delta)));
+      setAimCol((c) => Math.max(0, Math.min(slots - 1, c + delta)));
     },
-    [dropping, level.pegRows],
+    [slots],
   );
 
   const restartLevel = useCallback(() => {
-    if (dropAnimRef.current) dropAnimRef.current.stop();
+    stopLoop();
+    ballsRef.current = [];
     setBallsLeft(level.balls);
     setScore(0);
-    setDropCol(Math.floor(level.pegRows / 2));
-    setActivePath(null);
+    setAimCol(Math.floor(slots / 2));
     setLastBucket(null);
-    setDropping(false);
-  }, [level.balls, level.pegRows]);
+    forceTick((t) => t + 1);
+  }, [level.balls, slots, stopLoop]);
 
   const continueToNextLevel = useCallback(() => {
     setTotalScore((value) => value + score + Math.max(0, ballsLeft) * 25);
@@ -240,23 +379,11 @@ function PlinkoGameplay({
   );
 
   const secondaryActions: SecondaryAction[] = useMemo(
-    () => [
-      { label: "Restart", icon: "refresh", onPress: restartLevel },
-    ],
+    () => [{ label: "Restart", icon: "refresh", onPress: restartLevel }],
     [restartLevel],
   );
 
-  // Layout math.
-  const innerWidth = boardSize.width;
-  const innerHeight = boardSize.height;
-  const pegRows = level.pegRows;
-  const selectorH = 40;
-  const bucketH = 36;
-  const playH = Math.max(innerHeight - selectorH - bucketH - 8, 0);
-  const rowSpacing = pegRows > 0 ? playH / (pegRows + 1) : 0;
-  const colSpacing = innerWidth / (pegRows + 1);
-
-  const colX = (col: number) => colSpacing / 2 + col * colSpacing;
+  const balls = ballsRef.current;
 
   return (
     <InAppGameShell
@@ -272,7 +399,7 @@ function PlinkoGameplay({
               title: `Level ${levelIdx + 1} cleared`,
               subtitle: `Hit ${score} (target ${level.target}). ${ballsLeft} ball${ballsLeft === 1 ? "" : "s"} spare — bonus locked in.`,
             }
-          : noBallsLeft
+          : noBallsLeft && balls.every((b) => b.settled)
             ? {
                 title: "Out of balls",
                 subtitle: `You banked ${score} this round. Tap restart or move on.`,
@@ -312,7 +439,7 @@ function PlinkoGameplay({
                 rx={12}
               />
               <Circle
-                cx={colX(dropCol)}
+                cx={colX(aimCol)}
                 cy={selectorH / 2}
                 r={12}
                 fill={accent}
@@ -320,95 +447,82 @@ function PlinkoGameplay({
                 strokeWidth={2}
               />
 
-              {/* Pegs (staggered rows). */}
-              {Array.from({ length: pegRows }).map((_, r) => {
-                const cols = r % 2 === 0 ? pegRows : pegRows + 1;
-                const offset = r % 2 === 0 ? colSpacing : colSpacing / 2;
-                const y = selectorH + rowSpacing * (r + 1);
-                return Array.from({ length: cols }).map((__, c) => {
-                  const x = offset + c * colSpacing;
-                  if (x < 8 || x > innerWidth - 8) return null;
-                  return (
-                    <Circle
-                      key={`peg-${r}-${c}`}
-                      cx={x}
-                      cy={y}
-                      r={4}
-                      fill={accentInk}
-                      opacity={0.85}
-                    />
-                  );
-                });
-              })}
+              {/* Triangular peg grid */}
+              {pegs.map((p, i) => (
+                <Circle
+                  key={`peg-${i}`}
+                  cx={p.x}
+                  cy={p.y}
+                  r={p.r}
+                  fill={accentInk}
+                  opacity={0.85}
+                />
+              ))}
 
-              {/* Buckets */}
-              {Array.from({ length: buckets }).map((_, i) => {
-                const w = innerWidth / buckets;
-                const fill =
-                  lastBucket?.idx === i
-                    ? accent
+              {/* Slots — Unity-style multipliers, jackpot in the center */}
+              {Array.from({ length: slots }).map((_, i) => {
+                const x = i * slotW;
+                const isHit = lastBucket?.idx === i;
+                const value = scoreTable[i];
+                const isJackpot = value >= 500;
+                const fill = isHit
+                  ? accent
+                  : isJackpot
+                    ? "rgba(255,215,0,0.18)"
                     : i % 2 === 0
                       ? "rgba(0,0,0,0.05)"
                       : "rgba(0,0,0,0.08)";
                 return (
                   <Rect
                     key={`bucket-${i}`}
-                    x={i * w + 2}
-                    y={innerHeight - bucketH + 2}
-                    width={w - 4}
+                    x={x + 2}
+                    y={floorY + 2}
+                    width={slotW - 4}
                     height={bucketH - 4}
                     rx={8}
                     fill={fill}
-                    stroke={accentInk}
-                    strokeOpacity={0.18}
+                    stroke={isJackpot ? "#D4A017" : accentInk}
+                    strokeOpacity={isJackpot ? 0.6 : 0.18}
                   />
                 );
               })}
+
+              {/* Live balls */}
+              {balls.map((b) => (
+                <Circle
+                  key={`ball-${b.id}`}
+                  cx={b.x}
+                  cy={b.y}
+                  r={b.r}
+                  fill="#FFFFFF"
+                  stroke={accent}
+                  strokeWidth={3}
+                />
+              ))}
             </Svg>
           ) : null}
 
-          {/* Bucket score labels — rendered as Text so they look right on RN. */}
-          <View style={[styles.bucketRow, { width: innerWidth, height: bucketH }]}>
-            {Array.from({ length: buckets }).map((_, i) => (
-              <View key={`b-label-${i}`} style={[styles.bucketLabel, { width: innerWidth / buckets }]}>
-                <Text
-                  style={[
-                    styles.bucketText,
-                    { color: lastBucket?.idx === i ? "#FFFFFF" : accentInk },
-                  ]}
-                >
-                  {scoreTable[i]}
-                </Text>
-              </View>
-            ))}
+          {/* Slot labels rendered as RN Text so they stay legible at any DPI. */}
+          <View style={[styles.bucketRow, { width: innerWidth, height: bucketH, top: floorY }]}>
+            {Array.from({ length: slots }).map((_, i) => {
+              const value = scoreTable[i];
+              const isHit = lastBucket?.idx === i;
+              const isJackpot = value >= 500;
+              return (
+                <View key={`b-label-${i}`} style={[styles.bucketLabel, { width: slotW }]}>
+                  <Text
+                    style={[
+                      styles.bucketText,
+                      isJackpot && styles.bucketJackpot,
+                      { color: isHit ? "#FFFFFF" : isJackpot ? "#8A6500" : accentInk },
+                    ]}
+                  >
+                    {value}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
-
-          {/* Continuously animated puck — drives translateX/Y via Animated.Value. */}
-          {activePath && activePath.xs.length > 1 ? (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.puck,
-                {
-                  borderColor: accent,
-                  transform: [
-                    {
-                      translateX: dropProgress.interpolate({
-                        inputRange: activePath.xs.map((_, i) => i / (activePath.xs.length - 1)),
-                        outputRange: activePath.xs.map((x) => x - 10),
-                      }),
-                    },
-                    {
-                      translateY: dropProgress.interpolate({
-                        inputRange: activePath.ys.map((_, i) => i / (activePath.ys.length - 1)),
-                        outputRange: activePath.ys.map((y) => y - 10),
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-          ) : null}
         </View>
 
         <View style={styles.controlRow}>
@@ -416,16 +530,16 @@ function PlinkoGameplay({
             label="Left"
             icon="chevron-back"
             onPress={() => moveSelector(-1)}
-            disabled={dropping}
+            disabled={paused}
             tone="secondary"
             accent={accent}
             accentInk={accentInk}
           />
           <GameActionButton
-            label={dropping ? "Dropping…" : "DROP"}
+            label="DROP"
             icon="arrow-down"
             onPress={dropBall}
-            disabled={dropping || noBallsLeft || targetReached}
+            disabled={noBallsLeft || targetReached || paused}
             tone="primary"
             accent={accent}
             accentInk={accentInk}
@@ -435,7 +549,7 @@ function PlinkoGameplay({
             label="Right"
             icon="chevron-forward"
             onPress={() => moveSelector(1)}
-            disabled={dropping}
+            disabled={paused}
             tone="secondary"
             accent={accent}
             accentInk={accentInk}
@@ -455,10 +569,7 @@ const PlinkoGame = createGameRoute<PlinkoModeId>({
 export default PlinkoGame;
 
 const styles = StyleSheet.create({
-  body: {
-    flex: 1,
-    gap: 12,
-  },
+  body: { flex: 1, gap: 12 },
   boardFrame: {
     flex: 1,
     borderRadius: 22,
@@ -469,18 +580,8 @@ const styles = StyleSheet.create({
   },
   bucketRow: {
     position: "absolute",
-    bottom: 0,
-    flexDirection: "row",
-  },
-  puck: {
-    position: "absolute",
-    top: 0,
     left: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 3,
+    flexDirection: "row",
   },
   bucketLabel: {
     alignItems: "center",
@@ -488,8 +589,12 @@ const styles = StyleSheet.create({
   },
   bucketText: {
     ...typography.bold,
-    fontSize: 12,
+    fontSize: 13,
     fontVariant: ["tabular-nums"],
+  },
+  bucketJackpot: {
+    fontSize: 14,
+    letterSpacing: 0.4,
   },
   controlRow: {
     flexDirection: "row",

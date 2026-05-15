@@ -6,4 +6,3 @@ export * from "./schemas/streak";
 export * from "./schemas/redemption";
 export * from "./schemas/tiers";
 export * from "./schemas/monetization";
-export * from "./schemas/unity";

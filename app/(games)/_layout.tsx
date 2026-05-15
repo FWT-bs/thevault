@@ -28,15 +28,6 @@ export default function GamesLayout() {
       <Stack.Screen name="coloring" options={{ title: "Coloring" }} />
       <Stack.Screen name="fruit-merge" options={{ title: "Fruit Merge" }} />
       <Stack.Screen name="game-template" options={{ title: "In-App Game" }} />
-      <Stack.Screen
-        name="unity-game"
-        options={{
-          title: "Game",
-          headerShown: false,
-          animation: "fade",
-          contentStyle: { backgroundColor: "#000000" },
-        }}
-      />
     </Stack>
   );
 }

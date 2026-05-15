@@ -1,33 +1,8 @@
 import { isDevMegaActive } from "../auth/devMega";
-import { supabase } from "../supabase/client";
 
-let signInPromise: Promise<string | null> | null = null;
-
-async function readCurrentToken(): Promise<string | null> {
-  if (isDevMegaActive()) return null;
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
+// Auth backend was removed. Without an external token store the API
+// client falls back to the dev mega user header path.
 export async function getAccountAccessToken(): Promise<string | null> {
   if (isDevMegaActive()) return null;
-  const existing = await readCurrentToken();
-  if (existing) return existing;
-  if (!supabase) return null;
-
-  signInPromise ??= supabase.auth
-    .signInAnonymously()
-    .then(({ data, error }) => {
-      if (error) {
-        console.warn("Supabase anonymous sign-in failed", error.message);
-        return null;
-      }
-      return data.session?.access_token ?? null;
-    })
-    .finally(() => {
-      signInPromise = null;
-    });
-
-  return signInPromise;
+  return null;
 }

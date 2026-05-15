@@ -15,7 +15,5 @@ if [ ! -f apps/api/.env.local ]; then
   echo "Created apps/api/.env.local from apps/api/.env.example"
 fi
 
-echo "Check Supabase env with: npm run supabase:env"
-echo "Start local Supabase with: npm run supabase:start"
 echo "Done. Start API with: npm run api:dev"
 echo "Start mobile with: npm run start"

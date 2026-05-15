@@ -120,8 +120,9 @@ export default function Page() {
     isAppleSignInAvailable().then(setAppleAvailable);
   }, []);
 
-  // Exchange a Google id_token for a Supabase session as soon as the prompt
-  // returns one.
+  // Exchange a Google id_token for a session as soon as the prompt
+  // returns one. Today the exchange resolves to a stub (auth backend was
+  // removed); wire a real client into completeGoogleSignIn to re-enable.
   useEffect(() => {
     if (google.response?.type !== "success") return;
     const idToken = google.response.params?.id_token;
@@ -403,8 +404,10 @@ export default function Page() {
             <View style={styles.warningBox}>
               <Ionicons name="information-circle" size={16} color={V2.amberInk} />
               <Text style={styles.warningText}>
-                Supabase env keys are missing — auth is disabled. Add
-                EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY to .env.local.
+                Auth backend is not configured — sign-in providers are disabled.
+                {typeof __DEV__ !== "undefined" && __DEV__
+                  ? " Use the dev mega phone to bypass."
+                  : ""}
               </Text>
             </View>
           ) : null}

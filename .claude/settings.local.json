@@ -47,7 +47,11 @@
       "Bash(npm run *)",
       "Bash(npm ls *)",
       "Bash(git --no-pager diff HEAD -- package.json)",
-      "Bash(git --no-pager diff HEAD -- apps/api/package.json)"
+      "Bash(git --no-pager diff HEAD -- apps/api/package.json)",
+      "Bash(git ls-tree *)",
+      "Bash(rm -rf apps/unity-minigames)",
+      "Bash(rm -f services/unityBridge.ts types/azesmway-react-native-unity.d.ts app/\\\\\\(games\\\\\\)/unity-game.tsx packages/contracts/src/schemas/unity.ts MIGRATION_UNITY.md)",
+      "Bash(npm --prefix apps/api run typecheck)"
     ]
   }
 }
